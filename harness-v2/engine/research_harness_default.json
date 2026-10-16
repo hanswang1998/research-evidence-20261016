@@ -1,0 +1,22 @@
+{
+  "schema": "research_harness.v1",
+  "branch": "structure",
+  "prompts": {
+    "reflection": "先指出原判断和当前证据支持到哪一层；区分有效负结果、实现错误和未知。给出竞争解释、一个方法缺口、必须保留的成功行为、最小区分检验和停止条件。没有证据时保留原方法，不用增加篇幅代替改进。",
+    "generation": "围绕当前经济瓶颈生成可区分的研究假设；每个假设落实为原 research_frontier.v1 候选和 SPEC。保留来源、时点、依赖、预算、证伪与回退条件。未具备执行条件的候选如实登记，不伪造 ready。"
+  },
+  "generation": {
+    "questions": [
+      "这个候选要改变哪个判断，有哪些支持证据和反例？",
+      "与已有候选的机制差异是什么，是否只是改名或微调？",
+      "什么最小观察可以区分竞争解释，失败后应停止什么？",
+      "数据时点、依赖、核验和成本是否满足本次已有授权？"
+    ],
+    "max_candidates": 8,
+    "min_families": 3
+  },
+  "context": {
+    "order": ["goal", "evidence", "failures", "successes", "unknowns"],
+    "chars_per_item": 3000
+  }
+}
