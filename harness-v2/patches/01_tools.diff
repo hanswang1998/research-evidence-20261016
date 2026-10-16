@@ -1,0 +1,1308 @@
+diff --git a/config/line_digest/ml3.json b/config/line_digest/ml3.json
+new file mode 100644
+index 0000000..dac56b5
+--- /dev/null
++++ b/config/line_digest/ml3.json
+@@ -0,0 +1,32 @@
++{
++  "schema": "research_line_digest.v1",
++  "line": "ml3",
++  "state": "analysis/yjj_ml3_research_20261012/STATE.json",
++  "fields": [
++    {"pointer": "/status"},
++    {"pointer": "/baseline"},
++    {"pointer": "/next_action"},
++    {"pointer": "/authorization", "chars": 600},
++    {"pointer": "/current_plan"},
++    {"pointer": "/last_result"},
++    {"pointer": "/current_task/id"},
++    {"pointer": "/current_task/status"},
++    {"pointer": "/current_task/purpose"},
++    {"pointer": "/current_task/repairs_remaining"},
++    {"pointer": "/rsi/total_substantive_completed"},
++    {"pointer": "/rsi/completed_cycles"},
++    {"pointer": "/rsi/last_method_decision", "chars": 400},
++    {"pointer": "/feature_timing_policy", "chars": 400}
++  ],
++  "closed": {
++    "key_pattern": "^b\\d+(_preserved)?_closed_task$",
++    "fields": ["id", "status", "purpose"],
++    "chars_per_row": 220
++  },
++  "reflections": {
++    "glob": "analysis/yjj_ml3_research_20261012/batch*/REFLECTION.md",
++    "latest": 3,
++    "chars": 900
++  },
++  "max_chars": 22000
++}
+diff --git "a/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md" "b/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md"
+new file mode 100644
+index 0000000..cc026f1
+--- /dev/null
++++ "b/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md"
+@@ -0,0 +1,60 @@
++# Harness v2 运行说明
++
++2026-10-17 版。分两类：**不改变判定的工具**（状态摘要、计时、统一分类）可以直接用；**改变判定的规则**（回放 v2、兄弟分支、滚动验证、harness 统计比较）都要显式开启，不开启时与 v1 完全相同，建议先在一条线上试用。在途冻结件、旧 ENGINE、旧 REPORT 与旧哈希都不变。改动理由与证据见 harness-v2/CHANGES.md，本页只说怎么用。
++
++## 每批的固定顺序
++
++1. **先读本线状态摘要**，再按摘要指向的原件补读。
++2. 按[调度提示词](../研究调度提示词.md)第 1 节选题。若边界冻结了 `branching`（可选），同一可见状态会开出 2—3 个兄弟决策，每个检验不同机制。
++3. 执行器命令用计时工具包裹；生成、复核、沟通阶段用 start／stop 记时。
++4. 若边界冻结了 `walkforward_contract`（可选），核账后由控制器运行滚动验证，Agent 只读遮蔽版结论。
++5. `observe` 时绑定成本回执与滚动验证裁决；结果在原状态之外写统一的 `outcome` 类别。
++
++## 本线状态摘要
++
++`engine/research_line_digest.py` 按配置从本线 STATE 中只取决定下一步的字段，列出全部已关闭表达，附最近几次反思；每段摘录都带原件路径和 SHA256，并有总字符预算。示例配置为 `config/line_digest/ml3.json`。在 2026-10-16 的 ML3 STATE（388,984 字节，182 个键）上，摘要为 14,632 字符，列出 58 个已关闭表达。
++
++```powershell
++python -X utf8 -B engine/research_line_digest.py --config config/line_digest/ml3.json --root <项目根目录> --out <本批>/LINE_DIGEST.md
++```
++
++其他线复制该配置，改 `state`、`fields`（JSON pointer）、`closed.key_pattern` 与 `reflections.glob`。摘要只用于定位，裁决、授权与预算以原件为准。harness 评价案例中，把对应时点的摘要作为第一项 `evidence`。
++
++## 计时
++
++`engine/research_timing.py` 在工作发生时记录时间，写出不可覆盖的计时文件，`seconds` 字段可直接被成本回执读取（`seconds_path: "seconds"`）。
++
++- `run --event-id … --phase execution --out … -- <命令>`：包裹执行器命令，原样返回命令的退出码。
++- `start` ／ `stop`：用于不是子进程的 Agent 工作（generation、verification、communication、maintenance）。
++- `receipt --cost-contract … --subject <D*.json> --timer … [--none <phase>] --out …`：组装 `research_cost_receipt.v1`。没有计时的阶段写 `null`（未知）；只有确认完全没有该阶段活动时才用 `--none`（写 `[]`）。同一资源（默认 agent 或 compute）上时间重叠的两个计时拒绝组装。
++
++计时记录的是该资源上的活动时间，不是等待时间，也不是墙钟总时长。
++
++## 滚动验证
++
++`engine/research_walkforward.py`。默认合同：完整可见 2020—2022，验证折 2023、2024、2025；至少 2 折胜出、平均差不小于 0、各折回撤不超过 20%；遮蔽验证数字。
++
++```powershell
++python -X utf8 -B engine/research_walkforward.py default-contract > <边界目录>/WALKFORWARD_CONTRACT.json
++python -X utf8 -B engine/research_walkforward.py evaluate --contract <冻结合同> --candidate <候选逐日权益> --parent <父本逐日权益> --out <Agent可读>/WALKFORWARD.json --detail-out <控制器专用>/WALKFORWARD_DETAIL.json
++```
++
++候选与父本的交易日历必须完全一致，否则拒绝计算；每个窗口的行数不得低于该窗口工作日数的 85%（`min_calendar_coverage`），否则该折记 `calendar_gap`，整体为 `insufficient_data`。这是为了防止删掉部分日期后按更少的天数年化、制造出胜出折。批次冻结合同时，`start-batch` 会把打分器复制进批次；`observe` 用它从裁决里写明、且列在本结果证据中的两份权益文件重算，结论不一致即拒绝，所以不能拿别的实验或手写的 `pass` 文件充数。
++
++逐日权益接受 JSON 列表 `[{"date": "...", "equity": ...}]`、带 `equity_curve`／`daily`／`series` 的 JSON 对象，或含 date 与 equity（或 total_value／value／nav）列的 CSV。2026-01-01 起的行一律不读，并在 `sealed_rows_ignored` 中计数。`--detail-out` 的完整数字放在 Agent 不读取的位置；这是约定，须如实记录是否被打开。
++
++## 结果统一分类
++
++`engine/research_outcomes.py` 的八类：`improvement`、`negative`、`risk_limit`、`information`、`engineering_failure`、`evidence_gap`、`not_executed`、`unclassified`。新记录直接写其中之一；旧记录用 `classify` 尽力映射，判断不了的记 `unclassified`，不猜。在 2026-10-16 的 4,137 行台账上，映射后 `unclassified` 占 3.8%，主要是只写了 completed、看不出账户结论的记录。
++
++```powershell
++python -X utf8 -B engine/research_outcomes.py ledger --csv <台账CSV> --show-unclassified 20
++```
++
++## 在线交替对照
++
++`engine/research_online_ab.py` 比较两组已关闭批次（旧版与新版交替运行）。每组至少 30 个观察；主指标为改进率，观察带滚动验证裁决时为“账户评分改进且滚动验证通过”的比例（只有滚动验证通过、账户却是负结果的不算成功），次指标为未出结论率。区间为 Newcombe 区间。结论只说明开发期研究效率，不是独立经济确认。
++
++```powershell
++python -X utf8 -B engine/research_online_ab.py --incumbent <旧版批次目录...> --candidate <新版批次目录...> --out <报告>
++```
+diff --git a/engine/research_line_digest.py b/engine/research_line_digest.py
+new file mode 100644
+index 0000000..4da0336
+--- /dev/null
++++ b/engine/research_line_digest.py
+@@ -0,0 +1,153 @@
++#!/usr/bin/env python3
++"""Bounded per-line state digest for the start of each batch. Standard library only.
++
++In the three ML3 cases of 2026-10-16 each batch took 33-48 minutes, 64-76% of the
++43-118 tool calls were reads or searches, and 340-650 thousand characters were
++read back, while the account job itself took about 1.5 minutes. ML3 STATE.json
++alone holds 182 keys and 333 thousand characters, mostly closed tasks.
++
++The digest gives the Agent one bounded file: the fields that decide the next
++action, the list of closed expressions (so they are not reopened under a new
++name), and the latest reflections. Every excerpt cites the source path and
++SHA-256; full originals stay available and are opened only when needed.
++
++Config (research_line_digest.v1), paths relative to --root:
++{
++  "schema": "research_line_digest.v1", "line": "ml3",
++  "state": "analysis/yjj_ml3_research_20261012/STATE.json",
++  "fields": [{"pointer": "/status"}, {"pointer": "/rsi/completed_cycles", "chars": 200}],
++  "closed": {"key_pattern": "^b\\\\d+(_preserved)?_closed_task$", "fields": ["id", "status", "purpose"],
++             "chars_per_row": 220},
++  "reflections": {"glob": "analysis/yjj_ml3_research_20261012/batch*/REFLECTION.md", "latest": 3, "chars": 900},
++  "max_chars": 20000
++}
++"""
++from __future__ import annotations
++
++import argparse
++import hashlib
++import json
++import re
++import sys
++from datetime import datetime, timezone
++from pathlib import Path
++
++SCHEMA = "research_line_digest.v1"
++DEFAULT_FIELD_CHARS = 800
++
++
++def pointer_get(obj, pointer):
++    """RFC 6901 JSON pointer lookup; returns (found, value)."""
++    if pointer in ("", "/"):
++        return True, obj
++    for raw in pointer.lstrip("/").split("/"):
++        token = raw.replace("~1", "/").replace("~0", "~")
++        if isinstance(obj, dict) and token in obj:
++            obj = obj[token]
++        elif isinstance(obj, list) and token.isdigit() and int(token) < len(obj):
++            obj = obj[int(token)]
++        else:
++            return False, None
++    return True, obj
++
++
++def compact(value):
++    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, separators=(",", ":"))
++
++
++def clip(text, limit, where):
++    if len(text) <= limit:
++        return text
++    return text[:limit] + f" …[截断：{where} 共 {len(text)} 字符，按需读取原件]"
++
++
++def natural_key(path):
++    return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", str(path))]
++
++
++def build(config, root):
++    if config.get("schema") != SCHEMA:
++        raise ValueError("digest config schema mismatch")
++    root = Path(root).resolve()
++    state_path = (root / config["state"]).resolve()
++    raw = state_path.read_bytes()
++    state = json.loads(raw.decode("utf-8-sig"))
++    budget = config.get("max_chars", 20000)
++    lines = [f"# {config['line']} 本线状态摘要",
++             f"生成：{datetime.now(timezone.utc).isoformat()}　来源：{state_path}　SHA256={hashlib.sha256(raw).hexdigest()}"
++             f"　原件 {len(raw):,} 字节",
++             "摘要只为定位；裁决、授权与预算以原件为准。下面没有的内容请按引用打开原件，不要重读全量历史。", ""]
++    omitted = []
++
++    def add(block):
++        text = "\n".join(block)
++        if sum(len(x) + 1 for x in lines) + len(text) > budget:
++            return False
++        lines.extend(block)
++        return True
++
++    block = ["## 关键字段"]
++    for field in config.get("fields", []):
++        found, value = pointer_get(state, field["pointer"])
++        shown = clip(compact(value), field.get("chars", DEFAULT_FIELD_CHARS), field["pointer"]) if found else "（原件无此字段）"
++        block.append(f"- `{field['pointer']}`：{shown}")
++    if not add(block + [""]):
++        raise ValueError("max_chars too small for the key fields")
++
++    closed = config.get("closed")
++    if closed:
++        pattern = re.compile(closed["key_pattern"])
++        keys = sorted((k for k in state if pattern.search(k)), key=natural_key)
++        block = [f"## 已关闭表达（{len(keys)} 项；不要换名、换阈值或换窗口重开）"]
++        for key in keys:
++            item = state[key]
++            cells = [clip(compact(item.get(f, "")), 120, f"{key}.{f}") if isinstance(item, dict) else compact(item)
++                     for f in closed.get("fields", ["id", "status"])]
++            row = f"- {key}：" + " | ".join(cells)
++            block.append(clip(row, closed.get("chars_per_row", 220), key))
++        if not add(block + [""]):
++            omitted.append("closed")
++
++    reflections = config.get("reflections")
++    if reflections:
++        files = sorted(root.glob(reflections["glob"]), key=natural_key)[-reflections.get("latest", 3):]
++        block = ["## 最近反思"]
++        for path in reversed(files):
++            data = path.read_bytes()
++            text = data.decode("utf-8-sig").strip()
++            block += [f"### {path.relative_to(root)}（SHA256={hashlib.sha256(data).hexdigest()[:16]}…）",
++                      clip(text, reflections.get("chars", 900), str(path.relative_to(root)))]
++        if not add(block + [""]):
++            omitted.append("reflections")
++    if omitted:
++        lines.append(f"（超出 {budget} 字符预算未纳入：{', '.join(omitted)}；请缩短字段或提高 max_chars）")
++    text = "\n".join(lines) + "\n"
++    return text, {"schema": "research_line_digest_receipt.v1", "line": config["line"],
++                  "state": {"path": str(state_path), "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)},
++                  "digest_chars": len(text), "omitted": omitted}
++
++
++def main(argv=None):
++    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
++    parser.add_argument("--config", required=True)
++    parser.add_argument("--root", required=True, help="project root that config paths are relative to")
++    parser.add_argument("--out", required=True, help="digest Markdown; a .receipt.json is written beside it")
++    args = parser.parse_args(argv)
++    try:
++        config = json.loads(Path(args.config).read_text(encoding="utf-8-sig"))
++        text, receipt = build(config, args.root)
++        out = Path(args.out)
++        out.parent.mkdir(parents=True, exist_ok=True)
++        out.write_text(text, encoding="utf-8", newline="\n")
++        receipt["digest"] = {"path": str(out.resolve()), "sha256": hashlib.sha256(out.read_bytes()).hexdigest()}
++        out.with_suffix(".receipt.json").write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n",
++                                                    encoding="utf-8", newline="\n")
++        print(json.dumps(receipt, ensure_ascii=False))
++        return 0
++    except (ValueError, OSError, KeyError, json.JSONDecodeError) as error:
++        print(json.dumps({"status": "error", "detail": str(error)}, ensure_ascii=False), file=sys.stderr)
++        return 2
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/engine/research_online_ab.py b/engine/research_online_ab.py
+new file mode 100644
+index 0000000..fcc3603
+--- /dev/null
++++ b/engine/research_online_ab.py
+@@ -0,0 +1,157 @@
++#!/usr/bin/env python3
++"""Compare two scheduler policies or harness versions on real, interleaved batches.
++
++Offline replay can only score paths that were actually recorded. Because research
++here is cheap (an account job takes minutes), the more direct test is to run the
++incumbent and the candidate on alternating real batches and compare outcome rates.
++
++Each arm is a list of closed batch directories (BATCH.json, D*.json, O*.json).
++Outcomes use the canonical categories of research_outcomes.py. The primary
++success measure is ``improvement``; when observations carry a walk-forward verdict
++(``walkforward`` reference written by observe) it is ``validated``, i.e. an
++improvement whose walk-forward verdict is also ``pass``.
++The secondary guard is the no-verdict share (engineering failures + evidence gaps).
++
++Decision rule (frozen in --rule or defaults):
++  insufficient_data  either arm has fewer than min_decisions observations
++  prefer_candidate   success-rate difference lower bound > 0, the no-verdict share
++                     did not rise by more than max_no_verdict_increase (point
++                     estimate), and no rise in it is statistically detected
++  prefer_incumbent   success-rate difference upper bound < 0
++  no_difference      otherwise
++Intervals are Newcombe hybrid score intervals built from Wilson intervals.
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import math
++import statistics
++import sys
++from datetime import datetime
++from pathlib import Path
++
++STATUS_TO_CATEGORY = {"valid_improvement": "improvement", "valid_negative": "negative",
++                      "verified_information": "information", "implementation_error": "engineering_failure",
++                      "evidence_gap": "evidence_gap"}
++NO_VERDICT = {"engineering_failure", "evidence_gap"}
++DEFAULT_RULE = {"min_decisions": 30, "confidence": 0.9, "max_no_verdict_increase": 0.05}
++Z = {0.8: 1.2816, 0.9: 1.6449, 0.95: 1.96}
++
++
++def read(path):
++    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
++
++
++def wilson(successes, trials, z):
++    if trials == 0:
++        return 0.0, 1.0
++    p = successes / trials
++    denominator = 1 + z * z / trials
++    centre = (p + z * z / (2 * trials)) / denominator
++    margin = z * math.sqrt(p * (1 - p) / trials + z * z / (4 * trials * trials)) / denominator
++    return max(0.0, centre - margin), min(1.0, centre + margin)
++
++
++def newcombe(x1, n1, x2, n2, z):
++    """Interval for p1 - p2 (candidate minus incumbent)."""
++    p1, p2 = x1 / n1, x2 / n2
++    l1, u1 = wilson(x1, n1, z)
++    l2, u2 = wilson(x2, n2, z)
++    d = p1 - p2
++    return d - math.sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2), d + math.sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2)
++
++
++def walkforward_pass(observation):
++    ref = observation.get("walkforward")
++    if not ref:
++        return None
++    verdict = read(ref["path"])
++    return verdict.get("decision") == "pass"
++
++
++def arm_summary(directories):
++    rows, minutes, policies, harnesses = [], [], set(), set()
++    for directory in directories:
++        directory = Path(directory)
++        batch = read(directory / "BATCH.json")
++        policies.add(batch["policy"]["id"])
++        if batch.get("harness_deployment"):
++            harnesses.add(batch["harness_deployment"]["bundle"]["sha256"])
++        for outcome_path in sorted(directory.glob("O*.json")):
++            outcome = read(outcome_path)
++            decision = read(directory / ("D" + outcome_path.name[1:]))
++            category = STATUS_TO_CATEGORY.get(outcome["observation"]["status"], "unclassified")
++            rows.append({"category": category, "validated": walkforward_pass(outcome)})
++            started = datetime.fromisoformat(decision["at"].replace("Z", "+00:00"))
++            finished = datetime.fromisoformat(outcome["at"].replace("Z", "+00:00"))
++            minutes.append((finished - started).total_seconds() / 60)
++    counts = {}
++    for row in rows:
++        counts[row["category"]] = counts.get(row["category"], 0) + 1
++    has_walkforward = any(row["validated"] is not None for row in rows)
++    # Walk-forward pass is a necessary extra condition, never a substitute: a valid_negative
++    # account whose folds happen to pass is still not a success.
++    success = sum(1 for row in rows if row["category"] == "improvement" and
++                  (row["validated"] is True if has_walkforward else True))
++    return {"batches": len(directories), "decisions": len(rows), "counts": counts,
++            "success_measure": "validated" if has_walkforward else "improvement", "successes": success,
++            "no_verdict": sum(counts.get(c, 0) for c in NO_VERDICT),
++            "median_minutes_decision_to_outcome": statistics.median(minutes) if minutes else None,
++            "policies": sorted(policies), "harness_bundles": sorted(harnesses)}
++
++
++def compare(incumbent_dirs, candidate_dirs, rule=None):
++    rule = {**DEFAULT_RULE, **(rule or {})}
++    z = Z[rule["confidence"]]
++    a, b = arm_summary(incumbent_dirs), arm_summary(candidate_dirs)
++    result = {"schema": "research_online_ab.v1", "rule": rule, "incumbent": a, "candidate": b}
++    if a["success_measure"] != b["success_measure"]:
++        result["decision"] = "insufficient_data"
++        result["reason"] = "arms use different success measures; attach walk-forward verdicts to both"
++        return result
++    if min(a["decisions"], b["decisions"]) < rule["min_decisions"]:
++        result["decision"] = "insufficient_data"
++        result["reason"] = f"each arm needs at least {rule['min_decisions']} observed decisions"
++        return result
++    success = newcombe(b["successes"], b["decisions"], a["successes"], a["decisions"], z)
++    no_verdict = newcombe(b["no_verdict"], b["decisions"], a["no_verdict"], a["decisions"], z)
++    result["success_rate_difference_interval"] = success
++    result["no_verdict_rate_difference_interval"] = no_verdict
++    no_verdict_rise = b["no_verdict"] / b["decisions"] - a["no_verdict"] / a["decisions"]
++    result["no_verdict_rate_difference"] = no_verdict_rise
++    # An upper-bound guard would never pass at realistic sample sizes (with zero failures
++    # in both arms of 40, the upper bound is still 6.3%); guard on estimate plus detection.
++    if success[0] > 0 and no_verdict_rise <= rule["max_no_verdict_increase"] and no_verdict[0] <= 0:
++        result["decision"] = "prefer_candidate"
++    elif success[1] < 0:
++        result["decision"] = "prefer_incumbent"
++    else:
++        result["decision"] = "no_difference"
++    result["claims"] = "development-period research productivity only; not independent economic confirmation"
++    return result
++
++
++def main(argv=None):
++    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
++    parser.add_argument("--incumbent", nargs="+", required=True, help="closed batch directories run with the incumbent")
++    parser.add_argument("--candidate", nargs="+", required=True, help="closed batch directories run with the candidate")
++    parser.add_argument("--rule", help="frozen JSON overriding min_decisions / confidence / max_no_verdict_increase")
++    parser.add_argument("--out")
++    args = parser.parse_args(argv)
++    try:
++        rule = read(args.rule) if args.rule else None
++        result = compare(args.incumbent, args.candidate, rule)
++        text = json.dumps(result, ensure_ascii=False, indent=2)
++        if args.out:
++            with open(args.out, "x", encoding="utf-8", newline="\n") as handle:
++                handle.write(text + "\n")
++        print(text)
++        return 0
++    except (ValueError, OSError, KeyError) as error:
++        print(json.dumps({"status": "error", "detail": str(error)}, ensure_ascii=False), file=sys.stderr)
++        return 2
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/engine/research_outcomes.py b/engine/research_outcomes.py
+new file mode 100644
+index 0000000..abc7e20
+--- /dev/null
++++ b/engine/research_outcomes.py
+@@ -0,0 +1,144 @@
++#!/usr/bin/env python3
++"""Canonical research outcome categories. Standard library only.
++
++Every research line writes its own outcome strings; the 2026-10-16 ledger holds
++hundreds of spellings per line (cautious 370, structure 262, math 122). Rates
++such as "share of decisions that produced a verdict" cannot be compared across
++batches, lines or harness versions until each record maps to one fixed category.
++
++New records should write ``outcome`` with one of CATEGORIES directly and keep
++their detailed wording in a separate field. ``classify`` maps legacy wording on a
++best-effort basis and reports ``unclassified`` instead of guessing.
++"""
++from __future__ import annotations
++
++import argparse
++import csv
++import json
++import re
++import sys
++from collections import Counter
++
++CATEGORIES = (
++    "improvement",          # frozen economic criteria passed against the frozen parent
++    "negative",             # complete, valid account result that failed its criteria
++    "risk_limit",           # complete account rejected only by the drawdown / risk cap
++    "information",          # information or engineering question answered (positive or negative)
++    "engineering_failure",  # code, data or execution error; no valid answer produced
++    "evidence_gap",         # ran or partly ran, but the verdict is unknown / unscored / inadmissible
++    "not_executed",         # prepared, withdrawn, deferred or still waiting
++    "unclassified",         # legacy wording that does not determine a category
++)
++VERDICT = {"improvement", "negative", "risk_limit", "information"}
++NO_VERDICT = {"engineering_failure", "evidence_gap"}
++
++ACCOUNT_KINDS = {"account", "group"}
++
++# Ordered (pattern, category). The first match wins; patterns see lowercase text.
++_STRONG = [
++    (r"not_executed|withdrawn|deferred|prepared_or|^prepared$|^preparation$|pending|awaiting|waiting|"
++     r"not_account_ready|under_review|input_package_gap|no_new_ready|without_admitted|no_scientific_selection|"
++     r"not_selected|running_unconfirmed|needs_independent", "not_executed"),
++    (r"implementation_(error|invalid|fail)|repairs?_exhausted|preflight_failed|execution_failed|"
++     r"execution_failure|engineering_failure|^failed$|crash|exception|semantic_qualification_error|"
++     r"implementation_budget_exhausted|bootstrap_fail|collision|guard_failure|phase_failure|"
++     r"repair_unresolved|mapping_failure", "engineering_failure"),
++    (r"risk_limit|drawdown_only|mdd_exceeded|risk_cap", "risk_limit"),
++    (r"valid_improvement|^improved$|^improvement$|return_improved|development_gate_met|economic_gate_passed|"
++     r"development_gate_pass", "improvement"),
++    (r"unscored|unknown|unverified|evidence_gap|source_evidence_gap|coverage_gap|admissib|qualification_fail|"
++     r"right_censored|censored|economics_unknown|financial_unknown|unresolved_lifecycle|incomplete_economics|"
++     r"not_admitted|unadmitted|ineligible|metadata_qualification|admission_fail|source_unknown|readiness_gap|"
++     r"coverage_failed|unaccepted|space_insufficient|not_qualified", "evidence_gap"),
++]
++# A frozen criterion that failed is a valid (negative) answer, not a missing one.
++_NEGATIVE = (r"valid_negative|^negative$|economic_failure|profit_or_drawdown|gates?_fail|failed_development_goal|"
++             r"goal_failed|reject|closed_valid_negative|negative|close_expression|dual_failed|profit_or_risk_failed|"
++             r"rejected_candidate|close_fixed|closed_fixed|fixed_direction|source_activity|coactivity|"
++             r"distinction_gate|not_supported|no_positive|stop_exact|close_exact|close_invalid")
++_ANSWERED = (r"verified|information|^pass|_pass|passed|^complete|completed|^evaluated$|recorded_result|"
++             r"result_recorded|^primary$|descriptive|delivered|method_evidence|original_verdict_recorded|"
++             r"mechanics|derivation|diagnostic|^closed?$|^closed_|^close_|^stop|^retain|^accepted|census|"
++             r"computed|^allow|explains|counterexample|discovery_only|source_lead|^finding")
++_MISSING = r"fail|truncated|incomplete|missing|gap|unproven|ambiguous|insufficient"
++_STRONG_COMPILED = [(re.compile(pattern), category) for pattern, category in _STRONG]
++
++
++def classify(status, record_kind=None):
++    """Map one legacy outcome string (plus optional record kind) to a canonical category.
++
++    Information-stage records answer questions even when the answer is negative,
++    so their negatives count as ``information``. Account records that only say
++    "completed" or "recorded" do not reveal the verdict and stay ``unclassified``.
++    """
++    text = (status or "").strip().lower()
++    if not text:
++        return "unclassified"
++    if text in CATEGORIES:
++        return text
++    kind = (record_kind or "").strip().lower()
++    account = kind in ACCOUNT_KINDS
++    for pattern, category in _STRONG_COMPILED:
++        if pattern.search(text):
++            return "information" if category == "risk_limit" and kind and not account else category
++    if re.search(_NEGATIVE, text):
++        return "negative" if account or not kind else "information"
++    if account:
++        # "completed" or "recorded" on an account record does not reveal the economic verdict.
++        if re.search(r"verified_information|mechanics", text):
++            return "information"
++        return "evidence_gap" if re.search(_MISSING, text) else "unclassified"
++    if re.search(_MISSING, text):
++        return "evidence_gap"
++    if re.search(_ANSWERED, text):
++        return "information"
++    return "unclassified"
++
++
++def summarize(rows):
++    """rows: iterable of (status, record_kind). Returns counts and verdict / no-verdict shares."""
++    counts = Counter(classify(status, kind) for status, kind in rows)
++    total = sum(counts.values())
++    verdict = sum(counts[c] for c in VERDICT)
++    missing = sum(counts[c] for c in NO_VERDICT)
++    return {"total": total, "counts": {c: counts.get(c, 0) for c in CATEGORIES},
++            "verdict_share": verdict / total if total else None,
++            "no_verdict_share": missing / total if total else None,
++            "unclassified_share": counts.get("unclassified", 0) / total if total else None}
++
++
++def main(argv=None):
++    parser = argparse.ArgumentParser(description=__doc__)
++    sub = parser.add_subparsers(dest="command", required=True)
++    one = sub.add_parser("classify", help="classify one status string")
++    one.add_argument("status")
++    one.add_argument("--kind")
++    table = sub.add_parser("ledger", help="summarize a CSV ledger by line")
++    table.add_argument("--csv", required=True)
++    table.add_argument("--status-column", default="result_classification")
++    table.add_argument("--kind-column", default="record_kind")
++    table.add_argument("--line-column", default="research_line")
++    table.add_argument("--show-unclassified", type=int, default=0)
++    args = parser.parse_args(argv)
++    if args.command == "classify":
++        print(json.dumps({"status": args.status, "category": classify(args.status, args.kind)}, ensure_ascii=False))
++        return 0
++    csv.field_size_limit(10 ** 9)
++    by_line, unclassified = {}, Counter()
++    with open(args.csv, encoding="utf-8-sig", newline="") as handle:
++        for row in csv.DictReader(handle):
++            status, kind = row.get(args.status_column, ""), row.get(args.kind_column, "")
++            by_line.setdefault(row.get(args.line_column, ""), []).append((status, kind))
++            if classify(status, kind) == "unclassified":
++                unclassified[(status, kind)] += 1
++    report = {line: summarize(rows) for line, rows in sorted(by_line.items())}
++    report["_all"] = summarize([pair for rows in by_line.values() for pair in rows])
++    if args.show_unclassified:
++        report["_unclassified_examples"] = [{"status": s, "kind": k, "rows": n}
++                                            for (s, k), n in unclassified.most_common(args.show_unclassified)]
++    print(json.dumps(report, ensure_ascii=False, indent=2))
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/engine/research_timing.py b/engine/research_timing.py
+new file mode 100644
+index 0000000..1b4f862
+--- /dev/null
++++ b/engine/research_timing.py
+@@ -0,0 +1,198 @@
++#!/usr/bin/env python3
++"""Phase timers that produce research_cost_receipt.v1 inputs. Standard library only.
++
++The 2026-10-16 audit found compute end times on 139 of 4,137 ledger rows and at
++least one null cost field in all 1,277 method reports. Costs were written by hand
++after the fact, so they were mostly missing, and a missing cost blocked every
++method comparison. This tool records time where the work happens:
++
++  run     wraps an executor command and records start, end, exit code and seconds
++  start   / stop  bracket Agent work that is not a subprocess (generation, review)
++  receipt assembles the five-phase research_cost_receipt.v1 for one decision
++
++Every timer file is written once. ``seconds`` is the field cost receipts read
++(``seconds_path: "seconds"``). Two events on the same resource may not overlap,
++so a wrapper around a wrapper cannot count the same minutes twice.
++"""
++from __future__ import annotations
++
++import argparse
++import hashlib
++import json
++import os
++import socket
++import subprocess
++import sys
++from datetime import datetime, timezone
++from pathlib import Path
++
++PHASES = ("generation", "execution", "verification", "maintenance", "communication")
++DEFAULT_RESOURCE = {"generation": "agent", "communication": "agent", "maintenance": "agent",
++                    "execution": "compute", "verification": "compute"}
++
++
++def now():
++    return datetime.now(timezone.utc)
++
++
++def reference(path):
++    path = Path(path).resolve()
++    return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
++
++
++def write_once(path, value):
++    path = Path(path)
++    path.parent.mkdir(parents=True, exist_ok=True)
++    with path.open("x", encoding="utf-8", newline="\n") as handle:
++        json.dump(value, handle, ensure_ascii=False, indent=2, allow_nan=False)
++        handle.write("\n")
++    return reference(path)
++
++
++def check_identity(event_id, phase, resource):
++    if not event_id or not isinstance(event_id, str):
++        raise ValueError("event id required")
++    if phase not in PHASES:
++        raise ValueError("phase must be one of " + ", ".join(PHASES))
++    return resource or DEFAULT_RESOURCE[phase]
++
++
++def record(event_id, phase, resource, started, finished, command=None, exit_code=None, note=None):
++    seconds = (finished - started).total_seconds()
++    if seconds < 0:
++        raise ValueError("timer stopped before it started")
++    return {"schema": "research_timing.v1", "event_id": event_id, "phase": phase, "resource": resource,
++            "started_at": started.isoformat(), "finished_at": finished.isoformat(), "seconds": seconds,
++            "command": command, "exit_code": exit_code, "host": socket.gethostname(), "pid": os.getpid(),
++            "note": note, "accounting": "wall time of this event on its resource; not a wait or a total"}
++
++
++def run(event_id, phase, out, command, resource=None, note=None):
++    """Run a command and record its time; the command's exit code is returned unchanged."""
++    resource = check_identity(event_id, phase, resource)
++    if not command:
++        raise ValueError("command required after --")
++    if Path(out).exists():
++        raise ValueError("timer file already exists; use a new event id")
++    started = now()
++    completed = subprocess.run(command)
++    finished = now()
++    write_once(out, record(event_id, phase, resource, started, finished, command, completed.returncode, note))
++    return completed.returncode
++
++
++def start(event_id, phase, out, resource=None, note=None):
++    resource = check_identity(event_id, phase, resource)
++    value = {"schema": "research_timing_start.v1", "event_id": event_id, "phase": phase,
++             "resource": resource, "started_at": now().isoformat(), "note": note}
++    return write_once(out, value)
++
++
++def stop(start_path, out, note=None):
++    begun = json.loads(Path(start_path).read_text(encoding="utf-8"))
++    if begun.get("schema") != "research_timing_start.v1":
++        raise ValueError("not a timer start file")
++    started = datetime.fromisoformat(begun["started_at"])
++    value = record(begun["event_id"], begun["phase"], begun["resource"], started, now(),
++                   note=note or begun.get("note"))
++    value["start_file"] = reference(start_path)
++    return write_once(out, value)
++
++
++def overlapping(events):
++    """Pairs of events on one resource whose intervals overlap."""
++    clashes = []
++    by_resource = {}
++    for event in events:
++        by_resource.setdefault(event["resource"], []).append(event)
++    for resource, items in by_resource.items():
++        items.sort(key=lambda e: e["started_at"])
++        for left, right in zip(items, items[1:]):
++            if datetime.fromisoformat(right["started_at"]) < datetime.fromisoformat(left["finished_at"]):
++                clashes.append((resource, left["event_id"], right["event_id"]))
++    return clashes
++
++
++def receipt(cost_contract, subject, timers, out, kind="decision", none_phases=()):
++    """Assemble research_cost_receipt.v1. Phases without timers stay null (unknown).
++
++    ``none_phases`` lists phases the caller states had no activity at all; they are
++    written as [] (measured zero), which is different from null (not measured).
++    """
++    events = []
++    for path in timers:
++        value = json.loads(Path(path).read_text(encoding="utf-8"))
++        if value.get("schema") != "research_timing.v1":
++            raise ValueError(f"{path}: not a finished timer")
++        events.append({**value, "_path": path})
++    ids = [e["event_id"] for e in events]
++    if len(ids) != len(set(ids)):
++        raise ValueError("duplicate event id across timers")
++    clashes = overlapping(events)
++    if clashes:
++        raise ValueError("overlapping timers on one resource would double count: " + repr(clashes))
++    phases = {phase: None for phase in PHASES}
++    for phase in none_phases:
++        if phase not in PHASES:
++            raise ValueError("unknown phase " + phase)
++        phases[phase] = []
++    for event in events:
++        if phases[event["phase"]] is None:
++            phases[event["phase"]] = []
++        if event["phase"] in none_phases:
++            raise ValueError(f"phase {event['phase']} declared empty but has a timer")
++        phases[event["phase"]].append({"id": event["event_id"], "evidence": reference(event["_path"]),
++                                       "seconds_path": "seconds"})
++    value = {"schema": "research_cost_receipt.v1", "cost_contract": reference(cost_contract),
++             "kind": kind, "subject": reference(subject), "phases": phases}
++    return write_once(out, value)
++
++
++def main(argv=None):
++    argv = list(sys.argv[1:] if argv is None else argv)
++    command = []
++    if "--" in argv:
++        split = argv.index("--")
++        argv, command = argv[:split], argv[split + 1:]
++    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
++    sub = parser.add_subparsers(dest="command", required=True)
++    p = sub.add_parser("run", help="time one executor command: run ... -- <command>")
++    for name in ("--event-id", "--phase", "--out"):
++        p.add_argument(name, required=True)
++    p.add_argument("--resource")
++    p.add_argument("--note")
++    p = sub.add_parser("start", help="open a timer for non-subprocess work")
++    for name in ("--event-id", "--phase", "--out"):
++        p.add_argument(name, required=True)
++    p.add_argument("--resource")
++    p.add_argument("--note")
++    p = sub.add_parser("stop", help="close a timer opened with start")
++    p.add_argument("--start", required=True)
++    p.add_argument("--out", required=True)
++    p.add_argument("--note")
++    p = sub.add_parser("receipt", help="assemble a five-phase cost receipt")
++    p.add_argument("--cost-contract", required=True)
++    p.add_argument("--subject", required=True, help="the D*.json decision (or REPORT / TASK) this cost belongs to")
++    p.add_argument("--timer", action="append", default=[])
++    p.add_argument("--none", action="append", default=[], help="phase with no activity at all (written as [])")
++    p.add_argument("--kind", default="decision")
++    p.add_argument("--out", required=True)
++    args = parser.parse_args(argv)
++    try:
++        if args.command == "run":
++            return run(args.event_id, args.phase, args.out, command, args.resource, args.note)
++        if args.command == "start":
++            result = start(args.event_id, args.phase, args.out, args.resource, args.note)
++        elif args.command == "stop":
++            result = stop(args.start, args.out, args.note)
++        else:
++            result = receipt(args.cost_contract, args.subject, args.timer, args.out, args.kind, args.none)
++        print(json.dumps(result, ensure_ascii=False))
++        return 0
++    except (ValueError, OSError, KeyError) as error:
++        print(json.dumps({"status": "error", "detail": str(error)}, ensure_ascii=False), file=sys.stderr)
++        return 2
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/engine/research_walkforward.py b/engine/research_walkforward.py
+new file mode 100644
+index 0000000..c5ca1ca
+--- /dev/null
++++ b/engine/research_walkforward.py
+@@ -0,0 +1,259 @@
++#!/usr/bin/env python3
++"""Walk-forward verdicts on a candidate and its parent. Standard library only.
++
++Why: about 1,100 account candidates were ranked on the same 2020-2025 window.
++Structure line accounts have a median 275% annualized return (max 336%); ML3's
++median is 299% against a 316% baseline. The only true out-of-sample run, ML2 on
++2026-01-05..2026-09-30 (181 trading days, native), returned 57.6% annualized for
++E1002J (306% in development) and 91.2% for H543 (294% in development). Beating
++the parent again on the window that produced the parent mostly selects noise.
++
++This scorer splits one continuous account into a visible window and later
++validation folds. Only the visible window is reported in full; the folds decide,
++and by default the researcher-facing verdict shows each fold only as pass/fail
++plus a coarse delta bucket, so validation numbers cannot be tuned against. Folds
++may not overlap the visible window or each other (differencing overlapping
++windows would reveal the masked numbers). Rows on or after the seal date are
++never read.
++
++Input equity: JSON list of {"date": "YYYY-MM-DD", "equity": number}, a JSON
++object with such a list under "equity_curve" / "daily" / "series", or a CSV with
++date and equity columns. Annualization uses 250 trading days, as the project does.
++"""
++from __future__ import annotations
++
++import argparse
++import csv
++import hashlib
++import json
++import math
++import sys
++from datetime import date
++from pathlib import Path
++
++SCHEMA = "research_walkforward.v1"
++DEFAULT_CONTRACT = {
++    "schema": SCHEMA,
++    # The only window whose numbers the researcher sees in full.
++    "visible": ["2020-01-01", "2022-12-31"],
++    # Each later year is a validation fold reported as pass/fail plus a coarse bucket.
++    "folds": [
++        {"id": "V2023", "window": ["2023-01-01", "2023-12-31"]},
++        {"id": "V2024", "window": ["2024-01-01", "2024-12-31"]},
++        {"id": "V2025", "window": ["2025-01-01", "2025-12-31"]},
++    ],
++    "seal_start": "2026-01-01",
++    "min_fold_wins": 2,
++    "min_mean_delta_pp": 0.0,
++    "max_validation_mdd_pct": 20.0,
++    "annualization_days": 250,
++    "min_rows_per_window": 60,
++    # Rows per weekday in each window. A-share years trade about 242 of about 261 weekdays (0.93);
++    # a candidate that keeps only some rows would otherwise annualize the same growth over fewer days.
++    "min_calendar_coverage": 0.85,
++    "mask_validation": True,
++}
++BUCKETS = ((-math.inf, -10, "<-10pp"), (-10, -2, "-10..-2pp"), (-2, 2, "-2..+2pp"),
++           (2, 10, "+2..+10pp"), (10, math.inf, ">+10pp"))
++
++
++def day(value):
++    return date.fromisoformat(str(value)[:10])
++
++
++def reference(path):
++    path = Path(path).resolve()
++    return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
++
++
++def validate_contract(contract):
++    if contract.get("schema") != SCHEMA:
++        raise ValueError("walk-forward contract schema mismatch")
++    seal = day(contract["seal_start"])
++    v0, v1 = map(day, contract["visible"])
++    folds = contract["folds"]
++    if not folds or len({f["id"] for f in folds}) != len(folds):
++        raise ValueError("folds must be non-empty with unique ids")
++    previous_end = v1
++    if not v0 <= v1:
++        raise ValueError("visible window is empty")
++    for fold in folds:
++        f0, f1 = map(day, fold["window"])
++        # Folds must follow the visible window and each other; any overlap would let
++        # the full visible numbers, or one fold's bucket, reveal another fold.
++        if not (previous_end < f0 <= f1):
++            raise ValueError(f"{fold['id']}: folds must be ordered, non-overlapping and after the visible window")
++        if f1 >= seal:
++            raise ValueError(f"{fold['id']}: validation touches the sealed period")
++        previous_end = f1
++    if not 1 <= contract["min_fold_wins"] <= len(folds):
++        raise ValueError("min_fold_wins outside fold count")
++    if not 0 <= contract.get("min_calendar_coverage", 0.85) <= 1:
++        raise ValueError("min_calendar_coverage must be within 0..1")
++    return contract
++
++
++def load_equity(path, seal):
++    """Sorted (date, equity) rows strictly before the seal; returns rows and sealed count."""
++    path = Path(path)
++    text = path.read_text(encoding="utf-8-sig")
++    rows = []
++    if path.suffix.lower() == ".csv":
++        reader = csv.DictReader(text.splitlines())
++        fields = {name.lower(): name for name in reader.fieldnames or []}
++        date_key = next((fields[k] for k in ("date", "day", "trade_date") if k in fields), None)
++        value_key = next((fields[k] for k in ("equity", "total_value", "value", "nav") if k in fields), None)
++        if not date_key or not value_key:
++            raise ValueError(f"{path}: need date and equity columns")
++        rows = [(day(r[date_key]), float(r[value_key])) for r in reader if r[value_key] not in ("", None)]
++    else:
++        data = json.loads(text)
++        if isinstance(data, dict):
++            data = next((data[k] for k in ("equity_curve", "daily", "series", "equity") if k in data), None)
++        if not isinstance(data, list):
++            raise ValueError(f"{path}: no equity list found")
++        for item in data:
++            if isinstance(item, dict):
++                rows.append((day(item["date"]), float(item.get("equity", item.get("value")))))
++            else:
++                rows.append((day(item[0]), float(item[1])))
++    rows.sort()
++    if len({d for d, _ in rows}) != len(rows):
++        raise ValueError(f"{path}: duplicate dates")
++    if any(not math.isfinite(v) or v <= 0 for _, v in rows):
++        raise ValueError(f"{path}: equity must be positive and finite")
++    kept = [r for r in rows if r[0] < seal]
++    return kept, len(rows) - len(kept)
++
++
++def weekdays(start, end):
++    count, d = 0, start
++    while d <= end:
++        count += d.weekday() < 5
++        d = date.fromordinal(d.toordinal() + 1)
++    return count
++
++
++def window_metrics(rows, start, end, days, min_rows, min_coverage=0.0):
++    """Annualized return and max drawdown of one window, rebased on the prior close."""
++    start, end = day(start), day(end)
++    inside = [(d, v) for d, v in rows if start <= d <= end]
++    coverage = len(inside) / max(1, weekdays(start, end))
++    if len(inside) < min_rows:
++        return {"rows": len(inside), "annual_return_pct": None, "mdd_pct": None, "status": "insufficient_rows",
++                "calendar_coverage": coverage}
++    if coverage < min_coverage:
++        return {"rows": len(inside), "annual_return_pct": None, "mdd_pct": None, "status": "calendar_gap",
++                "calendar_coverage": coverage}
++    before = [v for d, v in rows if d < start]
++    base = before[-1] if before else inside[0][1]
++    periods = len(inside) if before else len(inside) - 1
++    growth = inside[-1][1] / base
++    annual = (growth ** (days / periods) - 1) * 100 if periods > 0 else None
++    peak, worst = base, 0.0
++    for _, value in inside:
++        peak = max(peak, value)
++        worst = max(worst, 1 - value / peak)
++    return {"rows": len(inside), "annual_return_pct": annual, "mdd_pct": worst * 100,
++            "total_return_pct": (growth - 1) * 100, "status": "ok", "calendar_coverage": coverage}
++
++
++def bucket(delta):
++    return next(label for low, high, label in BUCKETS if low <= delta < high)
++
++
++def evaluate(contract, candidate_path, parent_path):
++    contract = validate_contract(contract)
++    seal = day(contract["seal_start"])
++    cand, cand_sealed = load_equity(candidate_path, seal)
++    par, par_sealed = load_equity(parent_path, seal)
++    # Both arms must be scored on one trading calendar; otherwise dropping rows from the
++    # candidate (or the parent) changes its annualization and can manufacture fold wins.
++    only_cand = sorted({d for d, _ in cand} - {d for d, _ in par})
++    only_par = sorted({d for d, _ in par} - {d for d, _ in cand})
++    if only_cand or only_par:
++        raise ValueError(f"candidate and parent calendars differ: {len(only_cand)} dates only in candidate, "
++                         f"{len(only_par)} only in parent (first: {(only_cand or only_par)[0]})")
++    days, min_rows = contract["annualization_days"], contract["min_rows_per_window"]
++    coverage = contract.get("min_calendar_coverage", 0.85)
++    visible = {"window": contract["visible"],
++               "candidate": window_metrics(cand, *contract["visible"], days, min_rows, coverage),
++               "parent": window_metrics(par, *contract["visible"], days, min_rows, coverage)}
++    folds, wins, deltas, mdd_ok, complete = [], 0, [], True, True
++    for fold in contract["folds"]:
++        val_c = window_metrics(cand, *fold["window"], days, min_rows, coverage)
++        val_p = window_metrics(par, *fold["window"], days, min_rows, coverage)
++        known = val_c["status"] == val_p["status"] == "ok"
++        delta = val_c["annual_return_pct"] - val_p["annual_return_pct"] if known else None
++        fold_mdd_ok = known and val_c["mdd_pct"] <= contract["max_validation_mdd_pct"]
++        win = bool(known and delta > 0 and fold_mdd_ok)
++        complete &= known
++        mdd_ok &= bool(fold_mdd_ok)
++        wins += win
++        if known:
++            deltas.append(delta)
++        folds.append({"id": fold["id"], "window": fold["window"], "candidate": val_c, "parent": val_p,
++                      "delta_pp": delta, "win": win, "mdd_ok": bool(fold_mdd_ok)})
++    mean_delta = sum(deltas) / len(deltas) if deltas else None
++    passed = (complete and wins >= contract["min_fold_wins"] and mdd_ok and
++              mean_delta is not None and mean_delta >= contract["min_mean_delta_pp"])
++    decision = "pass" if passed else ("insufficient_data" if not complete else "fail")
++    return {"schema": "research_walkforward_verdict.v1", "contract": contract, "decision": decision,
++            "fold_wins": wins, "folds_required": contract["min_fold_wins"], "mean_validation_delta_pp": mean_delta,
++            "validation_mdd_ok": mdd_ok, "visible": visible, "folds": folds,
++            "candidate": reference(candidate_path), "parent": reference(parent_path),
++            "sealed_rows_ignored": {"candidate": cand_sealed, "parent": par_sealed},
++            "scope": "development-period walk-forward; not independent confirmation; 2026 stays sealed"}
++
++
++def masked(verdict):
++    """Researcher-facing copy: the visible window in full, each fold only as pass/fail and bucket."""
++    view = {k: v for k, v in verdict.items() if k not in {"folds", "mean_validation_delta_pp"}}
++    view["folds"] = [{"id": fold["id"], "window": fold["window"], "win": fold["win"], "mdd_ok": fold["mdd_ok"],
++                      "delta_bucket": bucket(fold["delta_pp"]) if fold["delta_pp"] is not None else None}
++                     for fold in verdict["folds"]]
++    view["mean_validation_delta_bucket"] = (bucket(verdict["mean_validation_delta_pp"])
++                                            if verdict["mean_validation_delta_pp"] is not None else None)
++    view["masked"] = True
++    return view
++
++
++def write_once(path, value):
++    path = Path(path)
++    path.parent.mkdir(parents=True, exist_ok=True)
++    with path.open("x", encoding="utf-8", newline="\n") as handle:
++        json.dump(value, handle, ensure_ascii=False, indent=2, allow_nan=False)
++        handle.write("\n")
++
++
++def main(argv=None):
++    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
++    sub = parser.add_subparsers(dest="command", required=True)
++    sub.add_parser("default-contract", help="print the default contract: visible 2020-2022, folds 2023/2024/2025")
++    p = sub.add_parser("evaluate", help="score a candidate against its parent")
++    p.add_argument("--contract", help="frozen contract JSON; default visible 2020-2022, folds 2023/2024/2025")
++    p.add_argument("--candidate", required=True, help="candidate daily equity (JSON or CSV)")
++    p.add_argument("--parent", required=True, help="parent daily equity on the same account rules")
++    p.add_argument("--out", required=True, help="researcher-facing verdict (masked unless the contract says no)")
++    p.add_argument("--detail-out", help="full numbers for the controller; keep outside the Agent's reading path")
++    args = parser.parse_args(argv)
++    try:
++        if args.command == "default-contract":
++            print(json.dumps(DEFAULT_CONTRACT, ensure_ascii=False, indent=2))
++            return 0
++        contract = json.loads(Path(args.contract).read_text(encoding="utf-8-sig")) if args.contract else DEFAULT_CONTRACT
++        verdict = evaluate(contract, args.candidate, args.parent)
++        if args.detail_out:
++            write_once(args.detail_out, verdict)
++        public = masked(verdict) if contract.get("mask_validation", True) else verdict
++        write_once(args.out, public)
++        print(json.dumps({"decision": verdict["decision"], "fold_wins": verdict["fold_wins"],
++                          "out": str(Path(args.out).resolve())}, ensure_ascii=False))
++        return 0
++    except (ValueError, OSError, KeyError) as error:
++        print(json.dumps({"status": "error", "detail": str(error)}, ensure_ascii=False), file=sys.stderr)
++        return 2
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/tests/test_harness_v2_tools.py b/tests/test_harness_v2_tools.py
+new file mode 100644
+index 0000000..d51b74c
+--- /dev/null
++++ b/tests/test_harness_v2_tools.py
+@@ -0,0 +1,257 @@
++"""Tests for the decision-neutral v2 tools (outcomes, timing, walk-forward, digest, online A/B).
++
++These modules only add records; they do not change any scheduler or harness decision, and
++these tests pass against the original v1 research_scheduler.py as well.
++Run from the project root:  python -X utf8 -B -m unittest discover -s tests -p "test_harness_v2_tools.py" -v
++"""
++import importlib.util
++import json
++from pathlib import Path
++import subprocess
++import sys
++import tempfile
++import unittest
++
++ENGINE = Path(__file__).resolve().parent.parent / "engine"
++
++
++def load(name):
++    spec = importlib.util.spec_from_file_location(name, ENGINE / (name + ".py"))
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module
++
++
++s = load("research_scheduler")
++h = load("research_harness")
++outcomes = load("research_outcomes")
++timing = load("research_timing")
++walk = load("research_walkforward")
++digest_mod = load("research_line_digest")
++ab = load("research_online_ab")
++
++
++class Temp(unittest.TestCase):
++    def setUp(self):
++        self._tmp = tempfile.TemporaryDirectory()
++        self.root = Path(self._tmp.name)
++        self.serial = 0
++
++    def tearDown(self):
++        self._tmp.cleanup()
++
++    def save(self, name, value):
++        self.serial += 1
++        path = self.root / f"{self.serial:04d}-{name}.json"
++        s.write(path, value)
++        return s.reference(path)
++
++    def text(self, name, body="evidence\n"):
++        path = self.root / name
++        path.write_text(body, encoding="utf-8")
++        return s.reference(path)
++
++
++def metrics(**values):
++    base = {"best_quality": 1.0, "resolved_questions": 1, "observed_nodes": 2, "unsupported_actions": 0,
++            "decision_calls": 2, "requests": 2, "unobserved_share": 0.0, "total_seconds": None,
++            "measured_seconds": None, "all_in_method_cost_seconds": None, "implementation_errors": 0,
++            "evaluation_stage": "economic", "cost_scope": "recorded_node_total_seconds"}
++    base.update(values)
++    return base
++
++
++def run(world, **values):
++    return {"world": world, "metrics": metrics(**values), "method_observations": [], "method_regression_questions": []}
++
++
++
++class OutcomeTests(unittest.TestCase):
++    def test_canonical_mapping(self):
++        cases = [("valid_improvement", "account", "improvement"), ("valid_negative", "account", "negative"),
++                 ("closed_complete_account_profit_or_drawdown_gate_failed", "account", "negative"),
++                 ("complete_risk_limit_failed", "account", "risk_limit"),
++                 ("implementation_error", "engineering", "engineering_failure"),
++                 ("closed_right_censored_lifecycle_economically_unscored", "account", "evidence_gap"),
++                 ("verified_information", "diagnostic", "information"),
++                 ("closed_valid_information_negative", "diagnostic", "information"),
++                 ("prepared_or_under_review", "preparation", "not_executed"),
++                 ("completed", "account", "unclassified")]
++        for status, kind, expected in cases:
++            self.assertEqual(outcomes.classify(status, kind), expected, status)
++
++    def test_summary_shares(self):
++        summary = outcomes.summarize([("valid_negative", "account"), ("implementation_error", "engineering"),
++                                      ("verified_information", "diagnostic"), ("completed", "account")])
++        self.assertEqual(summary["verdict_share"], 0.5)
++        self.assertEqual(summary["no_verdict_share"], 0.25)
++
++
++class TimingTests(Temp):
++    def test_run_start_stop_and_receipt_feed_the_scheduler(self):
++        executed = self.root / "exec.json"
++        code = timing.run("exec-1", "execution", executed, [sys.executable, "-c", "pass"])
++        self.assertEqual(code, 0)
++        begun = self.root / "gen.start.json"
++        timing.start("gen-1", "generation", begun)
++        generated = self.root / "gen.json"
++        timing.stop(begun, generated)
++        contract = self.save("cost", {"schema": "research_cost_contract.v1", "unit": "resource_seconds",
++                                      "phases": list(s.COST_PHASES), "accounting": "nonoverlapping_active_resource_time"})
++        subject = self.save("decision", {"id": "D0001"})
++        out = self.root / "receipt.json"
++        timing.receipt(contract["path"], subject["path"], [executed, generated], out,
++                       none_phases=["communication"])
++        events, missing = s.read_cost_receipt(s.reference(out), contract, subject)
++        self.assertEqual(sorted(e["phase"] for e in events), ["execution", "generation"])
++        self.assertEqual(sorted(missing), ["maintenance", "verification"])
++
++    def test_overlapping_timers_on_one_resource_are_rejected(self):
++        a = {"schema": "research_timing.v1", "event_id": "a", "phase": "execution", "resource": "compute",
++             "started_at": "2026-10-16T00:00:00+00:00", "finished_at": "2026-10-16T00:10:00+00:00", "seconds": 600}
++        b = {**a, "event_id": "b", "started_at": "2026-10-16T00:05:00+00:00", "finished_at": "2026-10-16T00:20:00+00:00"}
++        for name, value in (("a.json", a), ("b.json", b)):
++            (self.root / name).write_text(json.dumps(value), encoding="utf-8")
++        contract = self.save("cost", {"schema": "research_cost_contract.v1", "unit": "resource_seconds",
++                                      "phases": list(s.COST_PHASES), "accounting": "nonoverlapping_active_resource_time"})
++        subject = self.save("decision", {"id": "D0001"})
++        with self.assertRaises(ValueError):
++            timing.receipt(contract["path"], subject["path"], [self.root / "a.json", self.root / "b.json"],
++                           self.root / "r.json")
++
++
++class WalkForwardTests(Temp):
++    def curve(self, name, yearly):
++        """Daily equity with a constant daily growth per year; yearly maps year -> annual growth factor."""
++        from datetime import date, timedelta
++        rows, equity, d = [], 100000.0, date(2020, 1, 2)
++        while d <= date(2026, 9, 30):
++            if d.weekday() < 5:
++                equity *= yearly.get(d.year, 1.0) ** (1 / 250)
++                rows.append({"date": d.isoformat(), "equity": equity})
++            d += timedelta(days=1)
++        path = self.root / name
++        path.write_text(json.dumps(rows), encoding="utf-8")
++        return path
++
++    def test_validation_folds_decide_and_are_masked(self):
++        parent = self.curve("parent.json", {y: 2.0 for y in range(2020, 2027)})
++        # Better in the visible window, worse in two of three validation years.
++        candidate = self.curve("cand.json", {2020: 3, 2021: 3, 2022: 3, 2023: 1.5, 2024: 2.5, 2025: 1.5, 2026: 9})
++        verdict = walk.evaluate(walk.DEFAULT_CONTRACT, candidate, parent)
++        self.assertEqual(verdict["decision"], "fail")
++        self.assertEqual(verdict["fold_wins"], 1)
++        self.assertGreater(verdict["visible"]["candidate"]["annual_return_pct"],
++                           verdict["visible"]["parent"]["annual_return_pct"])
++        self.assertGreater(verdict["sealed_rows_ignored"]["candidate"], 0)
++        public = walk.masked(verdict)
++        text = json.dumps(public["folds"])
++        self.assertNotIn("annual_return_pct", text)
++        self.assertNotIn("delta_pp", text.replace("delta_bucket", ""))
++
++    def test_dropping_candidate_rows_cannot_manufacture_wins(self):
++        parent = self.curve("parent.json", {y: 1.25 for y in range(2020, 2027)})
++        rows = json.loads(parent.read_text(encoding="utf-8"))
++        by_year = {}
++        for row in rows:
++            by_year.setdefault(row["date"][:4], []).append(row)
++        sparse = [r for y in sorted(by_year) for r in by_year[y][:60] + [by_year[y][-1]]]
++        candidate = self.root / "sparse.json"
++        candidate.write_text(json.dumps(sparse), encoding="utf-8")
++        with self.assertRaises(ValueError):  # the reported counterexample: same curve, fewer rows
++            walk.evaluate(walk.DEFAULT_CONTRACT, candidate, parent)
++
++    def test_shared_but_gappy_calendar_is_insufficient(self):
++        rows = json.loads(self.curve("p.json", {y: 1.25 for y in range(2020, 2027)}).read_text(encoding="utf-8"))
++        gappy = [r for i, r in enumerate(rows) if i % 3 == 0]
++        a, b = self.root / "a.json", self.root / "b.json"
++        a.write_text(json.dumps(gappy), encoding="utf-8")
++        b.write_text(json.dumps(gappy), encoding="utf-8")
++        verdict = walk.evaluate(walk.DEFAULT_CONTRACT, a, b)
++        self.assertEqual(verdict["decision"], "insufficient_data")
++        self.assertEqual({f["candidate"]["status"] for f in verdict["folds"]}, {"calendar_gap"})
++
++    def test_overlapping_or_sealed_folds_are_rejected(self):
++        bad = json.loads(json.dumps(walk.DEFAULT_CONTRACT))
++        bad["folds"][1]["window"] = ["2023-06-01", "2024-12-31"]
++        with self.assertRaises(ValueError):
++            walk.validate_contract(bad)
++        sealed = json.loads(json.dumps(walk.DEFAULT_CONTRACT))
++        sealed["folds"].append({"id": "V2026", "window": ["2026-01-01", "2026-06-30"]})
++        with self.assertRaises(ValueError):
++            walk.validate_contract(sealed)
++
++
++class DigestTests(Temp):
++    def test_digest_is_bounded_and_lists_closed_expressions(self):
++        state = {"status": "research_active", "baseline": "E11J", "next_action": "继续",
++                 **{f"b{i}_closed_task": {"id": f"B{i}", "status": "closed_complete_risk_limit_failed",
++                                          "purpose": "x" * 500} for i in range(1, 30)},
++                 "huge": "y" * 200000}
++        (self.root / "line").mkdir()
++        (self.root / "line" / "STATE.json").write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
++        for i in (1, 2, 10):
++            (self.root / "line" / f"batch{i}").mkdir()
++            (self.root / "line" / f"batch{i}" / "REFLECTION.md").write_text(f"# B{i} 反思\n结论 {i}", encoding="utf-8")
++        config = {"schema": digest_mod.SCHEMA, "line": "t", "state": "line/STATE.json",
++                  "fields": [{"pointer": "/status"}, {"pointer": "/baseline"}, {"pointer": "/missing"}],
++                  "closed": {"key_pattern": r"^b\d+_closed_task$", "fields": ["id", "status", "purpose"]},
++                  "reflections": {"glob": "line/batch*/REFLECTION.md", "latest": 2, "chars": 200},
++                  "max_chars": 12000}
++        text, receipt = digest_mod.build(config, self.root)
++        self.assertLessEqual(len(text), 12100)
++        self.assertIn("已关闭表达（29 项", text)
++        self.assertIn("（原件无此字段）", text)
++        self.assertLess(text.index("batch10"), text.index("batch2"))  # newest reflection first, natural order
++        self.assertNotIn("batch1/", text)
++        self.assertNotIn("y" * 1000, text)
++
++
++class OnlineABTests(Temp):
++    def batch(self, name, policy, statuses):
++        directory = self.root / name
++        directory.mkdir()
++        s.write(directory / "BATCH.json", {"policy": {"id": policy}})
++        for i, status in enumerate(statuses, 1):
++            s.write(directory / f"D{i:04d}.json", {"at": "2026-10-16T00:00:00+00:00"})
++            s.write(directory / f"O{i:04d}.json", {"at": "2026-10-16T00:30:00+00:00",
++                                                    "observation": {"status": status}})
++        return directory
++
++    def test_walkforward_pass_alone_is_not_success(self):
++        def arm(name, passes):
++            directory = self.root / name
++            directory.mkdir()
++            s.write(directory / "BATCH.json", {"policy": {"id": name}})
++            for i in range(1, 41):
++                verdict = self.root / f"{name}-v{i}.json"
++                s.write(verdict, {"decision": "pass" if i <= passes else "fail"})
++                s.write(directory / f"D{i:04d}.json", {"at": "2026-10-16T00:00:00+00:00"})
++                s.write(directory / f"O{i:04d}.json", {"at": "2026-10-16T00:30:00+00:00",
++                                                        "observation": {"status": "valid_negative"},
++                                                        "walkforward": s.reference(verdict)})
++            return directory
++        result = ab.compare([arm("a", 4)], [arm("b", 20)])
++        self.assertEqual(result["candidate"]["successes"], 0)
++        self.assertNotEqual(result["decision"], "prefer_candidate")
++
++    def test_decisions(self):
++        a = self.batch("a", "old", ["valid_negative"] * 36 + ["valid_improvement"] * 4)
++        b = self.batch("b", "new", ["valid_negative"] * 20 + ["valid_improvement"] * 20)
++        self.assertEqual(ab.compare([a], [b])["decision"], "prefer_candidate")
++        self.assertEqual(ab.compare([b], [a])["decision"], "prefer_incumbent")
++        small = self.batch("c", "new", ["valid_improvement"] * 5)
++        self.assertEqual(ab.compare([a], [small])["decision"], "insufficient_data")
++
++
++class CliSmokeTests(unittest.TestCase):
++    def test_every_new_cli_prints_help(self):
++        for name in ("research_outcomes", "research_timing", "research_walkforward",
++                     "research_line_digest", "research_online_ab"):
++            completed = subprocess.run([sys.executable, "-B", str(ENGINE / (name + ".py")), "--help"],
++                                       capture_output=True, text=True)
++            self.assertEqual(completed.returncode, 0, name + completed.stderr)
++
++
++if __name__ == "__main__":
++    unittest.main()
