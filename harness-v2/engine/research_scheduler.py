@@ -5,6 +5,12 @@ The v1 choose() function drives action-only replay and legacy decision packets.
 An opt-in frontier pilot selects concrete hypotheses; v1 replay cannot certify it.
 Policies are a small executable decision language, not arbitrary Python plugins.
 All artifacts are immutable. Existing research control remains the execution gate.
+
+v2 (2026-10-16): replay scores a choice with no recorded continuation
+pessimistically (no quality, worst observed node cost) instead of discarding
+the whole candidate; unknown cost no longer blocks a bounded pilot offer (the
+pilot itself must measure it); batches may record sibling branches so that
+replay has more than one recorded path to compare.
 """
 from __future__ import annotations
 
@@ -29,6 +35,10 @@ STATUSES = {"valid_improvement", "valid_negative", "verified_information",
             "implementation_error", "evidence_gap"}
 POLICY_KEYS = {"id", "priority", "max_depth", "max_attempts", "reflection_every"}
 COST_PHASES = ("generation", "execution", "verification", "maintenance", "communication")
+REPLAY_SEMANTICS = "pessimistic_unobserved_v2"
+# A candidate whose replay mostly walks into unrecorded choices is not comparable.
+MAX_UNOBSERVED_SHARE = 0.5
+MAX_SIBLINGS = 3
 
 
 def require(ok, message):
@@ -826,13 +836,31 @@ def replay(world, policy, verify=True):
     resolved = {o["question"] for o in observations if o["resolved"]}
     unknown = sum(n["total_seconds"] is None for n in visible)
     unsupported = sum(t["status"] == "unsupported" for t in trace)
+    # v1 discarded every candidate that ever chose an unrecorded continuation. Because live
+    # batches ran one decision at a time, almost every alternative policy did, and 2,227 of
+    # 2,330 rejected candidates (2026-10-16 audit) failed on this alone. An unrecorded choice
+    # now reveals nothing (no quality, no resolved question) yet still counts as a request and
+    # is charged the worst cost observed in this world, so it can never look like a saving.
+    worst_total = max((n["total_seconds"] for n in world["nodes"] if n["total_seconds"] is not None), default=None)
+    worst_measured = max((n["measured_seconds"] for n in world["nodes"] if n["measured_seconds"] is not None),
+                         default=None)
+    def charged(values, worst):
+        if any(v is None for v in values) or (unsupported and worst is None):
+            return None
+        return sum(values) + unsupported * (worst or 0)
     metrics = {"best_quality": max(qualities) if qualities else None,
                "resolved_questions": len(resolved), "observed_nodes": len(visible),
                "unsupported_actions": unsupported, "decision_calls": len(trace),
+               "requests": len(visible) + unsupported,
+               "unobserved_share": unsupported / len(trace) if trace else 0.0,
                "known_measured_seconds": sum(n["measured_seconds"] or 0 for n in visible),
                "missing_measured_cost_nodes": sum(n["measured_seconds"] is None for n in visible),
                "missing_total_cost_nodes": unknown,
-               "total_seconds": None if unknown or unsupported else sum(n["total_seconds"] for n in visible),
+               "total_seconds": charged([n["total_seconds"] for n in visible], worst_total),
+               "measured_seconds": charged([n["measured_seconds"] for n in visible], worst_measured),
+               "unobserved_cost_charge": {"choices": unsupported, "worst_total_seconds": worst_total,
+                                          "worst_measured_seconds": worst_measured},
+               "replay_semantics": REPLAY_SEMANTICS,
                "implementation_errors": sum(o["status"] == "implementation_error" for o in observations)}
     metrics["evaluation_stage"] = evaluation_stage(world)
     metrics["cost_scope"] = cost_identity(world)
@@ -878,23 +906,34 @@ def propose(policy, feedback):
     return variants
 
 
-def dominates(candidate, incumbent):
+def requests(metrics):
+    """Requests a policy would really have issued: revealed nodes plus unrecorded choices."""
+    return metrics.get("requests", metrics["observed_nodes"] + metrics.get("unsupported_actions", 0))
+
+
+def unobserved_share(metrics):
+    calls = metrics.get("decision_calls") or 0
+    return metrics.get("unobserved_share", metrics.get("unsupported_actions", 0) / calls if calls else 0.0)
+
+
+def dominates(candidate, incumbent, max_unobserved_share=MAX_UNOBSERVED_SHARE):
     """Fixed request-count objective; unknown seconds never become zero-cost savings.
 
     Quality and resolved coverage must not decline. At least one conclusion is
     required. This only qualifies a policy for a pilot, not a time/money claim.
+    Unrecorded choices are scored pessimistically by replay(); a replay that is
+    mostly unrecorded is not comparable at all.
     """
     strict = False
     for new, old in zip(candidate, incumbent):
         a, b = new["metrics"], old["metrics"]
-        if any(m["best_quality"] is None or m["unsupported_actions"] for m in (a, b)):
+        if any(m["best_quality"] is None or unobserved_share(m) > max_unobserved_share for m in (a, b)):
             return False
         if (a["best_quality"] < b["best_quality"] or
                 a["resolved_questions"] < max(1, b["resolved_questions"]) or
-                a["observed_nodes"] > b["observed_nodes"]):
+                requests(a) > requests(b)):
             return False
-        strict |= (a["best_quality"] > b["best_quality"] or
-                   a["observed_nodes"] < b["observed_nodes"])
+        strict |= (a["best_quality"] > b["best_quality"] or requests(a) < requests(b))
     return strict
 
 
@@ -1074,8 +1113,8 @@ def review_prediction(proposal, candidate, incumbent, comparison):
         a = new[world]
         am, bm = a["metrics"], b["metrics"]
         for metric, lower_is_better in (("best_quality", False), ("resolved_questions", False),
-                ("stage_passed_questions", False), ("observed_nodes", True), ("implementation_errors", True)):
-            av, bv = am.get(metric), bm.get(metric)
+                ("stage_passed_questions", False), ("requests", True), ("implementation_errors", True)):
+            av, bv = (requests(am), requests(bm)) if metric == "requests" else (am.get(metric), bm.get(metric))
             if av is not None and bv is not None and (av > bv if lower_is_better else av < bv):
                 regressions.append(world + ":" + metric)
         checks = method_regressions(a, b)
@@ -1155,10 +1194,30 @@ def rrsi_propose(policy, feedback, plan):
     return variants
 
 
-def rrsi_compare(candidate, incumbent, floor=None):
-    """Require non-regression and known comparable node costs; novelty is not evidence."""
+def comparable_cost(a, b, scope):
+    """Pick the cost both arms actually measured; never mix scopes between the two arms.
+
+    Returns (key, a_value, b_value) or (None, None, None) when neither scope is known
+    for both. Unknown cost is reported, not converted to zero and not used as a saving.
+    """
+    keys = (["total_seconds", "measured_seconds"] if scope == "recorded_node_total_seconds"
+            else ["all_in_method_cost_seconds"])
+    for key in keys:
+        if a.get(key) is not None and b.get(key) is not None:
+            return key, a[key], b[key]
+    return None, None, None
+
+
+def rrsi_compare(candidate, incumbent, floor=None, max_unobserved_share=MAX_UNOBSERVED_SHARE):
+    """Require non-regression on the observed tree; novelty is not evidence.
+
+    v2: an unrecorded choice is charged pessimistically by replay() instead of voiding
+    the comparison; only a replay that is mostly unrecorded stays incomplete. Unknown
+    cost is recorded in ``notes`` and blocks savings claims, but no longer blocks a
+    bounded pilot offer. A pilot must freeze and then actually measure a cost cap.
+    """
     require(bool(candidate) and len(candidate) == len(incumbent), "unpaired RRSI comparison")
-    reasons, strict, complete = [], False, True
+    reasons, notes, strict, complete, cost_known = [], [], False, True, True
     for new, old in zip(candidate, incumbent):
         require(new["world"] == old["world"], "RRSI world mismatch")
         world_id, a, b = new["world"], new["metrics"], old["metrics"]
@@ -1172,8 +1231,12 @@ def rrsi_compare(candidate, incumbent, floor=None):
                 complete = False
             elif not check["passed"]:
                 reasons.append(world_id + ":required_regression:" + check["question"])
-        if any(m["unsupported_actions"] or (stage == "economic" and m["best_quality"] is None) for m in (a, b)):
-            reasons.append(world_id + ":unknown_quality_or_unobserved_path")
+        if any(unobserved_share(m) > max_unobserved_share for m in (a, b)):
+            reasons.append(world_id + ":insufficient_observed_coverage")
+            complete = False
+            continue
+        if stage == "economic" and any(m["best_quality"] is None for m in (a, b)):
+            reasons.append(world_id + ":unknown_quality")
             complete = False
             continue
         if stage == "economic":
@@ -1195,22 +1258,23 @@ def rrsi_compare(candidate, incumbent, floor=None):
                 strict |= a["stage_passed_questions"] > b["stage_passed_questions"]
         if a["resolved_questions"] < max(1, b["resolved_questions"]):
             reasons.append(world_id + ":resolved_coverage")
-        if a["observed_nodes"] > b["observed_nodes"]:
+        if requests(a) > requests(b):
             reasons.append(world_id + ":request_cost_increase")
         if a["implementation_errors"] > b["implementation_errors"]:
             reasons.append(world_id + ":more_implementation_errors")
-        cost_key = "total_seconds" if scope == "recorded_node_total_seconds" else "all_in_method_cost_seconds"
-        if a.get(cost_key) is None or b.get(cost_key) is None:
-            reasons.append(world_id + ":unknown_total_cost")
-            complete = False
+        cost_key, a_cost, b_cost = comparable_cost(a, b, scope)
+        if cost_key is None:
+            cost_known = False
+            notes.append(world_id + ":cost_unknown_not_blocking")
         else:
-            if a[cost_key] > b[cost_key]:
-                reasons.append(world_id + ":total_cost_increase")
-            strict |= a[cost_key] < b[cost_key]
-        strict |= (a["resolved_questions"] > b["resolved_questions"] or a["observed_nodes"] < b["observed_nodes"])
+            if a_cost > b_cost:
+                reasons.append(world_id + ":total_cost_increase:" + cost_key)
+            strict |= a_cost < b_cost
+        strict |= (a["resolved_questions"] > b["resolved_questions"] or requests(a) < requests(b))
     if not strict:
         reasons.append("no_strict_advantage")
-    return {"accepted": not reasons, "complete": complete, "reasons": reasons}
+    return {"accepted": not reasons, "complete": complete, "reasons": reasons,
+            "cost_known": cost_known, "notes": notes}
 
 
 def select_candidate(candidates, runs, comparisons, development, rrsi):
@@ -1226,12 +1290,12 @@ def select_candidate(candidates, runs, comparisons, development, rrsi):
         for k in development:
             m = runs[index][k]["metrics"]
             if not rrsi:
-                values.append((m["best_quality"], m["resolved_questions"], m["observed_nodes"]))
+                values.append((m["best_quality"], m["resolved_questions"], requests(m)))
                 continue
-            cost_key = ("total_seconds" if m.get("cost_scope", "recorded_node_total_seconds") ==
-                        "recorded_node_total_seconds" else "all_in_method_cost_seconds")
+            cost_keys = (("total_seconds", "measured_seconds") if m.get("cost_scope", "recorded_node_total_seconds") ==
+                         "recorded_node_total_seconds" else ("all_in_method_cost_seconds",))
             values.append((m["best_quality"], m.get("stage_passed_questions"), m["resolved_questions"],
-                           m["observed_nodes"], m["implementation_errors"], m[cost_key]))
+                           requests(m), m["implementation_errors"], *(m.get(k) for k in cost_keys)))
         return values
     selected = None
     if frontier and all(signature(i) == signature(frontier[0]) for i in frontier):
@@ -1277,7 +1341,9 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
                 "selection": "unique_pareto_or_equivalent_v1; frozen incumbent; quality, coverage and requests",
                 "cost_unit": "recorded_generation_evaluation_requests_not_tokens_or_seconds",
                 "model_revision_cost_seconds": None, "new_experiments": 0,
-                "independent_validation": False}
+                "independent_validation": False, "replay_semantics": REPLAY_SEMANTICS,
+                "max_unobserved_share": MAX_UNOBSERVED_SHARE,
+                "pilot_offer_rule": "development strict advantage + clean heldout non-regression; cost may be unknown"}
     if rrsi:
         contract.update(rrsi=regularization,
                         selection="unique_pareto_or_equivalent_v1; each candidate against frozen incumbent; incomparable tradeoffs retain incumbent",
@@ -1312,13 +1378,20 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
     selected, selection = select_candidate(candidates, candidate_runs, comparisons, development, rrsi)
     if selected is not None:
         winner, winning_results = candidates[selected]["policy"], candidate_runs[selected]
-    clean = all(w["admission"] == "prospective" and not w["limitations"] for w in worlds)
     heldout = [i for i, w in enumerate(worlds) if w["usage"] == "heldout"]
+    # v1 required every world, development included, to be prospective with no limitation.
+    # Exported worlds carry a limitation whenever any decision was overridden, so the offer
+    # was unreachable. Development worlds only generate and rank proposals; the clean,
+    # untouched evidence that matters is the heldout set, so only heldout must be clean.
+    clean = bool(heldout) and all(worlds[j]["admission"] == "prospective" and not worlds[j]["limitations"]
+                                  for j in heldout)
     heldout_comparison = None
     if rrsi and heldout:
         heldout_comparison = rrsi_compare([winning_results[j] for j in heldout], [base[j] for j in heldout])
     if rrsi:
-        heldout_pass = bool(heldout_comparison and heldout_comparison["accepted"])
+        # Heldout confirms non-regression; the strict advantage was required on development.
+        heldout_pass = bool(heldout_comparison and heldout_comparison["complete"] and
+                            set(heldout_comparison["reasons"]) <= {"no_strict_advantage"})
     else:
         heldout_pass = bool(heldout) and dominates([winning_results[j] for j in heldout], [base[j] for j in heldout])
     # Historical replay alone never changes a live batch. Only produce a pilot offer.
@@ -1347,7 +1420,7 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
         for j in development:
             measurements = [base[j]["metrics"]] + [r["metrics"][j] for r in results]
             known = [m["best_quality"] for m in measurements if m["best_quality"] is not None and
-                     not m["unsupported_actions"] and m["resolved_questions"] > 0]
+                     unobserved_share(m) <= MAX_UNOBSERVED_SHARE and m["resolved_questions"] > 0]
             observed_quality[worlds[j]["id"]] = max(known) if known else None
             admitted = ([base[j]["metrics"]] if base_admissible else []) + [
                 r["metrics"][j] for r in results if r["development_comparison"]["accepted"]]
@@ -1380,7 +1453,10 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
                           "candidate_space_exhausted": len(candidates) < 2,
                           "all_in_method_cost_seconds": None,
                           "method_cost_by_world": {r["world"]: r["metrics"]["all_in_method_cost_seconds"] for r in winning_results},
-                          "adaptation": "zero quality tolerance; no cost growth; novelty only proposes, never admits"}
+                          "adaptation": "zero quality tolerance; no known cost growth; unrecorded choices charged "
+                                        "pessimistically; unknown cost flagged, not admitted as saving; "
+                                        "novelty only proposes, never admits",
+                          "cost_unknown_candidates": sum(not c.get("cost_known", True) for c in comparisons)}
         if regularization["previous_report"]:
             bound(regularization["previous_report"])
     write(output / "REPORT.json", report)
@@ -1511,6 +1587,15 @@ def start_batch(report_path, boundary_path, output):
         require(report["decision"] == "retain_incumbent" and report["next_policy"] == report["incumbent"],
                 "keep the scheduler policy fixed during a harness trial")
         harness = check_harness_deployment(boundary["harness_deployment"], boundary)
+    walkforward = boundary.get("walkforward_contract")
+    if walkforward is not None:
+        require(read(bound(walkforward)).get("schema") == "research_walkforward.v1", "invalid walk-forward contract")
+    branching = boundary.get("branching")
+    if branching is not None:
+        # Parallel siblings give replay more than one recorded child per decision point.
+        require(isinstance(branching, dict) and set(branching) == {"siblings"} and
+                type(branching["siblings"]) is int and 1 <= branching["siblings"] <= MAX_SIBLINGS,
+                "branching needs 1..%d siblings" % MAX_SIBLINGS)
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     obj = {"schema": SCHEMA, "at": now(), "branch": report["branch"],
@@ -1531,15 +1616,43 @@ def start_batch(report_path, boundary_path, output):
         obj.update(mode="frontier_pilot", frontier_pilot=frontier_pilot)
     if harness:
         obj["harness_deployment"] = harness
+    if branching is not None:
+        obj["branching"] = branching
+    if walkforward is not None:
+        obj["walkforward_contract"] = walkforward
     write(output / "BATCH.json", obj)
     return obj
 
 
+def walkforward_decision(config, result):
+    """Bound walk-forward verdict for an economic result, or None when the batch froze none."""
+    if not config.get("walkforward_contract"):
+        require(not result.get("walkforward"), "walk-forward verdict requires a boundary-frozen contract")
+        return None
+    require(bool(result.get("walkforward")), "this batch froze a walk-forward contract; bind its verdict")
+    verdict = read(bound(result["walkforward"]))
+    require(verdict.get("schema") == "research_walkforward_verdict.v1" and
+            verdict["contract"] == read(bound(config["walkforward_contract"])), "verdict uses another contract")
+    require(verdict["decision"] in {"pass", "fail", "insufficient_data"}, "invalid walk-forward decision")
+    return verdict["decision"]
+
+
 def ledger(directory):
+    """Observed nodes and the first pending decision (single-decision callers)."""
+    nodes, pending = ledger_all(directory)
+    return nodes, (pending[0] if pending else None)
+
+
+def ledger_all(directory):
+    """Observed nodes in decision order and every pending decision of the open sibling group.
+
+    Node ids follow decision ids (D0005 -> n0005). With one decision at a time this is
+    identical to v1 numbering; with siblings, outcomes may arrive in any order.
+    """
     directory = Path(directory)
     config = read(directory / "BATCH.json")
     decisions = sorted(directory.glob("D*.json"))
-    nodes = []
+    nodes, pending = [], []
     for path in decisions:
         decision = read(path)
         require(bound(decision["batch"]) == (directory / "BATCH.json").resolve(), "wrong batch binding")
@@ -1549,8 +1662,8 @@ def ledger(directory):
             bound(decision["selected"]["spec"])
         outcome_path = directory / ("O" + path.name[1:])
         if not outcome_path.exists():
-            node_costs(config, nodes)
-            return nodes, decision
+            pending.append(decision)
+            continue
         outcome = read(outcome_path)
         require(bound(outcome["decision"]) == path.resolve(), "decision binding mismatch")
         bound(outcome["input"])
@@ -1571,7 +1684,7 @@ def ledger(directory):
             require(decision["question"] == outcome["observation"]["question"], "decision stage question mismatch")
             evaluate_stage(config["evaluation_contract"], outcome.get("stage_evidence"), outcome["observation"])
     node_costs(config, nodes)
-    return nodes, None
+    return nodes, pending
 
 
 def has_override(nodes):
@@ -1594,9 +1707,10 @@ def next_decision(directory, context_path):
         config = batch(directory)
         if (directory / "EXPORT.json").exists() or (directory / "PILOT_REVIEW.json").exists():
             return {"status": "batch_closed", "action": "use the recorded next policy in a new boundary-frozen batch"}
-        nodes, pending = ledger(directory)
+        nodes, pending = ledger_all(directory)
         if pending:
-            return {"status": "pending_result", "decision": pending["id"], "resubmit": False}
+            return {"status": "pending_result", "decision": pending[0]["id"],
+                    "decisions": [d["id"] for d in pending], "resubmit": False}
         if has_override(nodes):
             return reflection_due(config, nodes, "override recorded; export diagnostic and re-evaluate")
         completed = {n["observation"]["question"] for n in nodes if
@@ -1616,46 +1730,89 @@ def next_decision(directory, context_path):
             require(context.get("question") in stage_contract(config["evaluation_contract"])["questions"],
                     "context needs a boundary-frozen stage question")
         view = public_view(nodes, set(), len(nodes), config["policy"]["max_attempts"])
+        width = sibling_width(config, nodes, view)
         frontier_ref, comparison = None, None
         if config["mode"] == "frontier_pilot":
             frontier_ref = context.get("frontier", config["frontier_pilot"]["initial_frontier"])
             if config.get("harness_deployment"):
                 require(frontier_ref == config["frontier_pilot"]["initial_frontier"],
                         "harness batch must use its frozen Agent-generated frontier")
-            selected, comparison = choose_frontier(read(bound(frontier_ref)), config, nodes)
+            selections, comparison = choose_frontier_siblings(read(bound(frontier_ref)), config, nodes, width)
         else:
             require("frontier" not in context, "frontier requires a boundary-frozen frontier pilot")
             selected = choose(view, config["policy"])
-        if selected is None:
+            selections = [selected] * width if selected else []
+        if not selections:
             if comparison is not None:
                 return {"status": "frontier_exhausted", "comparison": comparison,
                         "action": "prepare independent hypotheses or close this bounded pilot; do not duplicate a decision"}
             return reflection_due(config, nodes, "policy stopped or decision budget exhausted")
-        index = len(nodes) + 1
-        obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "id": f"D{index:04d}",
-               "batch": reference(directory / "BATCH.json"), "context": reference(context_path),
-               "policy_id": config["policy"]["id"], "view": view,
-               "visible_nodes": [n["id"] for n in nodes], "selected": selected,
-               "instruction": "Generate one authorized research action from this anchor; bind this receipt in its frozen protocol. Log any override; do not silently ignore it."}
-        if frontier_ref:
-            obj.update(frontier=frontier_ref, comparison=comparison,
-                       instruction="Execute only the selected candidate specification under existing authorization. Bind this decision and candidate hash. Preserve all other hypotheses; preparation is independent of pending execution.")
-        if config.get("evaluation_contract"):
-            obj["question"] = selected["question"] if frontier_ref else context["question"]
-        if config.get("harness_deployment"):
-            obj["harness"] = config["harness_deployment"]
-        write(directory / (obj["id"] + ".json"), obj)
-        return obj
+        first = len(nodes) + 1
+        written = []
+        for offset, selected in enumerate(selections):
+            index = first + offset
+            obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "id": f"D{index:04d}",
+                   "batch": reference(directory / "BATCH.json"), "context": reference(context_path),
+                   "policy_id": config["policy"]["id"], "view": view,
+                   "visible_nodes": [n["id"] for n in nodes], "selected": copy.deepcopy(selected),
+                   "instruction": "Generate one authorized research action from this anchor; bind this receipt in its frozen protocol. Log any override; do not silently ignore it."}
+            if frontier_ref:
+                obj.update(frontier=frontier_ref, comparison=comparison,
+                           instruction="Execute only the selected candidate specification under existing authorization. Bind this decision and candidate hash. Preserve all other hypotheses; preparation is independent of pending execution.")
+            if len(selections) > 1:
+                obj["sibling"] = {"group": f"D{first:04d}", "index": offset + 1, "size": len(selections)}
+                obj["instruction"] += (f" This is sibling {offset + 1} of {len(selections)} from the same visible state: "
+                                       "each sibling must test a different mechanism, not a parameter variant of another.")
+            if config.get("evaluation_contract"):
+                obj["question"] = selected["question"] if frontier_ref else context["question"]
+            if config.get("harness_deployment"):
+                obj["harness"] = config["harness_deployment"]
+            write(directory / (obj["id"] + ".json"), obj)
+            written.append(obj)
+        if len(written) == 1:
+            return written[0]
+        return {"status": "sibling_decisions", "decisions": written,
+                "action": "run every sibling under existing authorization; observe each result by its own decision id"}
+
+
+def sibling_width(config, nodes, view):
+    """Decisions to open from one visible state, bounded by every frozen request budget."""
+    width = config.get("branching", {}).get("siblings", 1)
+    width = min(width, view["remaining"])
+    if config["mode"] == "pilot":
+        width = min(width, config["pilot_criteria"]["max_requests"] - len(nodes))
+    if config["mode"] == "frontier_pilot":
+        width = min(width, config["frontier_pilot"]["max_decisions"] - len(nodes))
+    return max(1, width)
+
+
+def choose_frontier_siblings(frontier, config, nodes, limit):
+    """Top-ranked eligible candidates from distinct hypotheses; no extra budget is created."""
+    selected, comparison = choose_frontier(frontier, config, nodes)
+    if selected is None:
+        return [], comparison
+    picks = [selected]
+    by_id = {candidate["id"]: candidate for candidate in frontier["candidates"]}
+    for row in comparison["ranking"]:
+        if len(picks) >= limit:
+            break
+        candidate = by_id[row["candidate_id"]]
+        if any(p["candidate_id"] == candidate["id"] or p["hypothesis_id"] == candidate["hypothesis_id"] for p in picks):
+            continue
+        picks.append(frontier_selection(candidate))
+    return picks, comparison
 
 
 def observe(directory, result_path):
     directory = Path(directory)
     with lock(directory):
         config = batch(directory)
-        nodes, pending = ledger(directory)
-        require(pending is not None, "no pending decision")
+        nodes, pendings = ledger_all(directory)
+        require(bool(pendings), "no pending decision")
         result = read(result_path)
-        require(result["branch"] == config["branch"] and result["decision_id"] == pending["id"], "result identity mismatch")
+        pending = next((d for d in pendings if d["id"] == result.get("decision_id")), None)
+        require(result["branch"] == config["branch"] and pending is not None, "result identity mismatch")
+        index = int(pending["id"][1:])
         require(type(result["decision_followed"]) is bool, "decision_followed required")
         if not result["decision_followed"]:
             require(bool(result.get("override_reason")), "override reason required")
@@ -1667,15 +1824,21 @@ def observe(directory, result_path):
         economic = observation["status"] in {"valid_improvement", "valid_negative"}
         computed_quality = None
         account_scorecard = None
+        validated = walkforward_decision(config, result) if economic else None
         if economic:
             if quality_contract(config["quality_contract"])["schema"] == "research_quality.v2":
                 account_scorecard = review_account(config["quality_contract"], result["grade_evidence"])
                 computed_quality = account_scorecard["quality"]
-                expected = ("valid_improvement" if account_scorecard["decision"] in
-                            {"return_improved", "risk_repair_tradeoff"} else "valid_negative")
-                require(observation["status"] == expected, "outcome status disagrees with account scorecard")
+                improved = account_scorecard["decision"] in {"return_improved", "risk_repair_tradeoff"}
+                # With a frozen walk-forward contract, a development-window gain alone is not an improvement.
+                if validated is not None:
+                    improved = improved and validated == "pass"
+                expected = "valid_improvement" if improved else "valid_negative"
+                require(observation["status"] == expected, "outcome status disagrees with account scorecard / walk-forward")
             else:
                 computed_quality = grade(config["quality_contract"], result["grade_evidence"])
+                require(observation["status"] != "valid_improvement" or validated in {None, "pass"},
+                        "valid_improvement requires a walk-forward pass in this batch")
         require(observation["quality"] is None or observation["quality"] == computed_quality,
                 "manual quality disagrees with frozen evaluator")
         observation["quality"] = computed_quality
@@ -1692,10 +1855,9 @@ def observe(directory, result_path):
         for ref in result["evidence"]:
             bound(ref)
         require(not result.get("cost_receipt") or config.get("cost_contract"), "cost receipt requires a frozen contract")
-        cost_node = {"id": f"n{len(nodes) + 1:04d}", "cost_receipt": result.get("cost_receipt"),
+        cost_node = {"id": f"n{index:04d}", "cost_receipt": result.get("cost_receipt"),
                      "evidence": [reference(directory / (pending["id"] + ".json"))]}
         node_costs(config, nodes + [cost_node])
-        index = len(nodes) + 1
         obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "node": f"n{index:04d}",
                "decision": reference(directory / (pending["id"] + ".json")),
                "input": reference(result_path), "observation": observation,
@@ -1705,6 +1867,9 @@ def observe(directory, result_path):
                "evidence": result["evidence"]}
         if account_scorecard is not None:
             obj["account_scorecard"] = account_scorecard
+        if result.get("walkforward"):
+            obj["walkforward"] = result["walkforward"]
+            obj["walkforward_decision"] = validated
         if stage_review is not None:
             obj.update(stage_review=stage_review, stage_evidence=result["stage_evidence"])
         if result.get("cost_receipt"):

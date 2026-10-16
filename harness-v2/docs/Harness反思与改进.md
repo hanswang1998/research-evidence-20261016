@@ -1,5 +1,7 @@
 # Harness 反思与改进闭环
 
+**2026-10-16 v2 修订（用户要求，下一合法未冻结边界生效；在途冻结件、旧 REVIEW 与旧哈希不变）。** 依据 2026-10-16 证据包：1,277 份方法报告、2,554 个候选、0 次换版；harness 本身尚未有真实轮次。本次改动：①配对比较从“任一案例任一判据不得退化”改为按案例计胜负的符号检验，Wilson 下界须大于 1/2，开发轮至少 16 个配对案例（试点 8 个），只对事前声明的关键判据保留一票否决；②每轮候选上限 2→4；③候选版本包写入证券代码或具体日期直接拒绝；④独立复核改用 `research_harness_critic.v2`，必须写 `verifier_model` 且与生成 Agent 不同模型家族；⑤成本未知不再阻止获得有界试点资格，但不能宣称节省，试点必须用 [计时工具](harness/v2运行说明.md#计时) 实测。理由与证据见 harness-v2/CHANGES.md。
+
 2026-10-15，接口 `research_harness.v1`。这是结构／旧 ML 调度的可选维护入口；接入其他线须适配本线消费者，不能仅凭这份文档宣称接通。
 
 当前 Agent 根据证据修改版本包，Python 组装实际任务、校验生成物、比较结果并冻结下一批绑定。原 `next → observe → review-pilot → export` 继续执行。代码不另启模型、不付费调用、不提交实验、不恢复任何研究线，也不改已有冻结 ENGINE、PLAN、SPEC、批次或经济评分器。
@@ -36,7 +38,9 @@ Agent 不应只写“加强反思”。须回答：原判断及证据、反例�
 | `generation` | Agent 收到必须考虑的问题；生成池按候选上限检查 | `questions` 为 1—12 项；`max_candidates` 为 1—8；`min_families` 为 1—候选上限。不足机制族必须给真实缺口和补充动作 |
 | `context` | 按声明顺序组装真实原件摘录、路径、SHA 和行号 | `goal/evidence/failures/successes/unknowns` 五节全部保留；单项摘录 128—12000 字符；截断明示，完整引用保留 |
 
-每轮最多两项候选，每项只改一个组件，全部候选在任何一次评价任务准备前冻结；拒绝项也占名额且不删除。变更后采用新文件和新 SHA。Python 不接受任意候选代码、评分器、执行授权或交易表达字段。`cycle --rrsi` 原有的 `priority/max_depth` 修改仍是另一条入口，不能与 harness 试点同时改动。
+每轮最多四项候选（v1 为两项；单次生成只需几分钟，名额不再是瓶颈），每项只改一个组件，全部候选在任何一次评价任务准备前冻结；拒绝项也占名额且不删除。变更后采用新文件和新 SHA。Python 不接受任意候选代码、评分器、执行授权或交易表达字段。`cycle --rrsi` 原有的 `priority/max_depth` 修改仍是另一条入口，不能与 harness 试点同时改动。
+
+**泄漏检查（v2）。** 候选版本包中新增的提示词或生成问题若写入证券代码（如 600519、sz000001、600519.XSHG）或具体日期（2024-02-05、20240205、2024年2月），提案记 `accepted=false` 并在 `leakage` 列出位置，不进入评价。年份本身（“2023 年验证段”）和普通数字不算。harness 改动只能改变方法，不能把某批任务的答案写进下一版指令（RRSI 的 leakage critic 思路）。
 
 `TASK.instructions` 是 Agent 必须实际使用的任务输入；`generation` 接口要求原始回复、调用／执行证据及生成池绑定该 TASK。程序校验结构和来源，不会代替 Agent 写候选，也不会只看到“我用了新版”就将其当作效果证明。文件哈希不能证明模型调用和独立复核的真实性，原调用记录与复核过程须如实保留。
 
@@ -51,10 +55,11 @@ Agent 不应只写“加强反思”。须回答：原判断及证据、反例�
 | `protocol / evidence` | 原方法计划引用；非空反思证据引用列表 |
 | `incumbent` | 当前 harness 版本包引用 |
 | `agent_model` | 实际模型身份，两组固定一致；不是切换模型的指令 |
-| `limits` | `context_chars` 1000—120000；`resource_seconds` 正数；`candidates` 1—2 |
+| `limits` | `context_chars` 1000—120000；`resource_seconds` 正数；`candidates` 1—4 |
+| `decision_rule`（可选） | `{rule: paired_sign_wilson_v1, min_cases, confidence, critical_checks, max_unpaired_share, cost_tolerance}`；缺省为开发 16 案例、试点 8、合成 1，置信 0.9，未配对上限 20%，成本容忍 0；真实轮次不能调低案例下限 |
 | `cost_contract` | 原 `research_cost_contract.v1` 引用 |
 | `selector` | 原选择器的 `rule`；若为 `bottleneck_evidence_cost_v1`，同时绑定原 `selection_contract` |
-| `cases` | 1—12 项，分别为 `{input: CASE引用, evaluation_contract: 阶段合同引用}` |
+| `cases` | 开发轮 16—60 项、前瞻试点 8—60 项、合成 1—60 项，分别为 `{input: CASE引用, evaluation_contract: 阶段合同引用}`；案例从台账中的历史状态快照取，每案例第一项 `evidence` 建议放该时点的[本线状态摘要](harness/v2运行说明.md#本线状态摘要) |
 | `previous_review`（可选） | 上次 harness REVIEW，下一基线必须等于其 `next_harness` |
 | `execution_feedback`（可选） | 已关闭执行批次的 PILOT_REVIEW；其实际 D/O 证据必须进入本轮 `evidence`，基线遵循其 `next_harness` |
 | `pilot_offer`（前瞻必填） | 开发轮给出的试点资格 REVIEW；候选由该报告锁定，不再修改 |
@@ -104,7 +109,7 @@ python -X utf8 -B '本轮目录/ENGINE.py' harness --round '本轮目录' --requ
 
 提案 `research_harness_proposal.v1` 绑定 `parent`、`reflection_task`、`evidence`、`bundle`、`component`，并写非空 `diagnosis / alternative_explanation / preserve / stop_rule`。`expected_effect` 当前支持 `{metric: passed_checks, direction: increase}` 或 `{metric: total_seconds, direction: decrease}`，用来核对预测而非自报成功。
 
-独立复核 `research_harness_critic.v1` 绑定 `proposal`、本轮 `contract`、非空 `evidence`、`verifier` 和 `independent=true`；`checks` 恰为四个布尔项：`evidence_grounded / bounded_change / preserves_success / testable_prediction`。须实际复核，不用程序自动填四个 true。
+独立复核 `research_harness_critic.v2` 绑定 `proposal`、本轮 `contract`、非空 `evidence`、`verifier`、`verifier_model` 和 `independent=true`；`checks` 恰为四个布尔项：`evidence_grounded / bounded_change / preserves_success / testable_prediction`。须实际复核，不用程序自动填四个 true。开发与试点轮次中 `verifier_model` 必须与 `agent_model` 属于不同模型家族（如 gpt-* 生成则用 claude-* 或 deepseek-* 复核）：2026-10-16 核查的 ML3 12 个审查会话都是生成者同一模型，角色分离不等于独立。合成夹具仍可用 v1。复核者先独立形成判断，再读提案者理由。
 
 Agent 读完 TASK 后使用其反思、生成和上下文要求，输出原 `research_frontier.v1` 与 SPEC。FRONTIER 的 `generation_evidence` 必须含 TASK 引用，仍执行原来源、身份、依赖、短缺说明等校验；新选择器还须满足其原 SPEC 格式。再保存 `research_harness_response.v1`：
 
@@ -124,7 +129,14 @@ Agent 读完 TASK 后使用其反思、生成和上下文要求，输出原 `res
 
 ## 5. 比较、成本与回退
 
-父本与每个通过提案复核的候选都在全部冻结 CASE 上完成一次任务和结果登记，再统一比较：原来通过的**每个案例中的每项判据**不得退化；双方总成本必须完整，任何一次不得超出冻结预算；候选总成本不得增加，并且至少有一项判据新增通过或总成本严格下降。两候选互有优劣时保留父本；等价候选按内容哈希稳定选取，不依赖注册／完成顺序。失败、未知、被拒绝版本和预测命中／落空均保留。
+父本与每个通过提案复核的候选都在全部冻结 CASE 上完成一次任务和结果登记，再统一比较（v2 `paired_sign_wilson_v1`）：
+
+- 每个案例比较双方通过的冻结判据个数：候选多为胜、少为负、相等为平。候选该案例失败或未知**记负**；父本失败或未知该案例不配对，未配对超过 `max_unpaired_share` 时不能关轮比较。
+- 胜率（胜／(胜+负)）的 Wilson 下界须大于 1/2。按 0.9 置信，16 个决出胜负的案例至少 12 胜；3 胜 0 负也只是勉强过线。`critical_checks` 中任一判据在任一案例从通过变为不通过，直接拒绝。
+- 双方成本都已测全时，候选总成本不得超过父本 ×(1+`cost_tolerance`)，任何一次不得超出冻结预算；无负案例且成本严格下降也可算优势。成本未测全时记 `cost_known=false`，不阻止有界试点资格，但不能宣称节时；试点在原 `pilot_criteria` 冻结成本上限，并用计时工具实测。
+- 多个候选都通过时，按 Wilson 下界高者、已知成本低者、内容哈希依次选取，不依赖注册／完成顺序。失败、未知、被拒绝版本和预测命中／落空均保留。
+
+v1 的“每个案例中的每项判据不得退化”在每案例只生成一次的情况下会因为随机波动拒掉真实改进，同时又分不清运气和改进；v1 还要求成本完整，而当时 1,277 份方法报告全部有成本字段为空。
 
 每次 RESULT 的 `cost_receipt` 沿用五阶段合同（生成、执行、核验、维护、沟通），`kind=harness_attempt`，`subject=TASK引用`。事件引用真实计时原件及字段；零支出阶段明确 `[]`，未测阶段 `null`，没有整个回执也保持未知。不得在旧版和候选之间复用同一计时事件。
 
@@ -156,6 +168,6 @@ BOUNDARY 的 `frontier_pilot.initial_frontier` 必须精确引用该 GENERATION 
 
 ## 7. 产物与验收口径
 
-每轮最多两个候选、12 个配对问题及一次部署任务；SOURCE、SPEC、模型记录和外部计时沿原引用复用。CONTRACT 保存产物上限／估计字节，REVIEW 的 `artifact_storage` 只累计本轮自有评价文件的实际逻辑字节和文件数，明确不含报告自身、后续部署及共享外部原件。冻结文件拒绝覆盖。中断留下的部分目录不等于已完成，按原任务身份检查，保留失败，不重新提交研究。
+每轮最多四个候选、60 个配对问题及一次部署任务；SOURCE、SPEC、模型记录和外部计时沿原引用复用。CONTRACT 保存产物上限／估计字节，REVIEW 的 `artifact_storage` 只累计本轮自有评价文件的实际逻辑字节和文件数，明确不含报告自身、后续部署及共享外部原件。冻结文件拒绝覆盖。中断留下的部分目录不等于已完成，按原任务身份检查，保留失败，不重新提交研究。
 
 工程验收覆盖真实任务组装、原执行链接线、反馈回流、配对比较、独立核验、缺失成本、冻结和回退。临时夹具不能计作真实 Agent 使用或研究效果；具体证据见 [本次验收目录](../analysis/research_method_supervision_20260922/harness_loop_20261015/)。当前仍需下一合法批次的实际 Agent 输入／输出、独立语义复核和完整成本，才能做前瞻方法比较；策略的独立经济确认继续走原协议。

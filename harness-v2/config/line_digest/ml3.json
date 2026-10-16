@@ -1,0 +1,32 @@
+{
+  "schema": "research_line_digest.v1",
+  "line": "ml3",
+  "state": "analysis/yjj_ml3_research_20261012/STATE.json",
+  "fields": [
+    {"pointer": "/status"},
+    {"pointer": "/baseline"},
+    {"pointer": "/next_action"},
+    {"pointer": "/authorization", "chars": 600},
+    {"pointer": "/current_plan"},
+    {"pointer": "/last_result"},
+    {"pointer": "/current_task/id"},
+    {"pointer": "/current_task/status"},
+    {"pointer": "/current_task/purpose"},
+    {"pointer": "/current_task/repairs_remaining"},
+    {"pointer": "/rsi/total_substantive_completed"},
+    {"pointer": "/rsi/completed_cycles"},
+    {"pointer": "/rsi/last_method_decision", "chars": 400},
+    {"pointer": "/feature_timing_policy", "chars": 400}
+  ],
+  "closed": {
+    "key_pattern": "^b\\d+(_preserved)?_closed_task$",
+    "fields": ["id", "status", "purpose"],
+    "chars_per_row": 220
+  },
+  "reflections": {
+    "glob": "analysis/yjj_ml3_research_20261012/batch*/REFLECTION.md",
+    "latest": 3,
+    "chars": 900
+  },
+  "max_chars": 22000
+}
