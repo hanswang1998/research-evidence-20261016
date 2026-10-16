@@ -7,8 +7,9 @@ incumbent and the candidate on alternating real batches and compare outcome rate
 
 Each arm is a list of closed batch directories (BATCH.json, D*.json, O*.json).
 Outcomes use the canonical categories of research_outcomes.py. The primary
-success measure is ``validated`` when observations carry a walk-forward verdict
-(``walkforward`` reference written by observe), otherwise ``improvement``.
+success measure is ``improvement``; when observations carry a walk-forward verdict
+(``walkforward`` reference written by observe) it is ``validated``, i.e. an
+improvement whose walk-forward verdict is also ``pass``.
 The secondary guard is the no-verdict share (engineering failures + evidence gaps).
 
 Decision rule (frozen in --rule or defaults):
@@ -89,7 +90,10 @@ def arm_summary(directories):
     for row in rows:
         counts[row["category"]] = counts.get(row["category"], 0) + 1
     has_walkforward = any(row["validated"] is not None for row in rows)
-    success = sum(1 for row in rows if (row["validated"] is True if has_walkforward else row["category"] == "improvement"))
+    # Walk-forward pass is a necessary extra condition, never a substitute: a valid_negative
+    # account whose folds happen to pass is still not a success.
+    success = sum(1 for row in rows if row["category"] == "improvement" and
+                  (row["validated"] is True if has_walkforward else True))
     return {"batches": len(directories), "decisions": len(rows), "counts": counts,
             "success_measure": "validated" if has_walkforward else "improvement", "successes": success,
             "no_verdict": sum(counts.get(c, 0) for c in NO_VERDICT),

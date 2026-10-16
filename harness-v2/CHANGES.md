@@ -1,4 +1,33 @@
-# Harness v2 修改说明（2026-10-16）
+# Harness v2 修改说明（2026-10-16，2026-10-17 复核后修订）
+
+## 2026-10-17 复核后的修订（先读这一节）
+
+本地复核复现了 4 个误判。我逐个确认是我的错误，已经修复，并都加了回归测试：
+
+| # | 问题 | 原因 | 修复 |
+|---|---|---|---|
+| 1 | 冻结预算 100 秒，一次实测 1000 秒，另一例成本未知，候选仍通过；harness 前瞻试点也能在成本不全时判为支持 | 只有全部成本已知时才检查预算 | 每个已测成本都检查预算；前瞻试点成本不全不能判为支持 |
+| 2 | 两组各 40 个账户全是 `valid_negative`，A/B 却给出 `prefer_candidate` | 把“滚动验证通过”当成了成功 | 成功＝账户评分改进**且**滚动验证通过 |
+| 3 | 同一条曲线，候选每年只留前 60 行和年末一行，年化从约 28% 变成约 190%，三折全胜 | 双方各按自己的行数年化，没有检查交易日 | 候选与父本交易日历必须完全一致，否则拒绝计算；各窗口行数须不低于工作日数的 85% |
+| 4 | 只写着 `pass`、没有候选和父本的文件也能通过调度器 | 只检查了 schema、合同和 decision 字段 | 裁决必须写明候选与父本权益文件，两份文件须列在本结果的证据里；`observe` 用批次开始时冻结的打分器从这两份文件重算，结论或胜出折数不一致即拒绝 |
+
+**改变判定的部分全部改为显式开启，默认行为与 v1 一致。**
+- 调度器：回放 v2 需要 `cycle --replay-semantics v2`（默认 v1）；兄弟分支、滚动验证本来就要在边界声明。我做了差分验证：同样的输入下，默认 `cycle` 的 REPORT 和 CONTRACT（RRSI 开与关两种情况）与原版完全一致；批次流程 `start-batch → next → observe → export` 除时间戳外完全一致。
+- harness：计划里写了 `decision_rule: {rule: paired_sign_wilson_v1}`，才启用统计比较、4 个候选、60 个案例和泄漏拒绝；不写就完全是原 v1 的比较。
+- 撤回了三项：
+  - `GUARD` 恢复原文，v2 的提示语放进可版本化的默认版本包；
+  - 异模型复核改为只记录 `critic_independence`，不再阻止提案；
+  - `当前研究目标.md` 恢复原文，ML3 的线内目标不改。验收标准里的本地／原生抽检和容量敏感性改为“建议”。
+
+**合并方式（取代下文“直接覆盖”的说法）。** 本目录基于 2026-10-16 证据包的快照，早于本地 1.1.0，**不要整目录覆盖**，否则会丢掉本地新吸收的 ML2 规则。`patches/` 下有两份 diff，按文件三方合并，冲突以本地 1.1.0 为准：
+- `01_tools.diff`：只新增文件（5 个工具、示例配置、运行说明、工具测试），不改动任何已有文件，可以先吸收；
+- `02_opt_in_semantics.diff`：调度器、harness、默认版本包和文档的改动。默认不改变行为，但和本地 1.1.0 中较新的六个文件需要逐段合并。
+
+**测试。** 新增 40 个测试，全部通过：工具 12 个，语义 28 个（含上面 4 个反例和“默认等于 v1”的检查）。工具的 12 个测试在原版调度器和 harness 上也通过。原有的 154 个相关测试我这边仍然无法运行。默认改回 v1 后，预计剩下的失败主要来自少数直接检查新函数签名或新字段的用例，需要本地复跑确认。你另外构造的 3 个反例请发给我，我补成回归测试。
+
+---
+
+## 原说明（2026-10-16）
 
 ## 一句话
 
@@ -6,7 +35,7 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 
 ## 这个目录怎么用
 
-`harness-v2/` 按项目原路径放文件，可直接覆盖到项目根目录：
+`harness-v2/` 按项目原路径放文件（合并方式见上一节，**不要整包覆盖**）：
 
 | 路径 | 状态 |
 |---|---|
@@ -19,7 +48,7 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 | `engine/research_line_digest.py` | 新增 |
 | `engine/research_online_ab.py` | 新增 |
 | `config/line_digest/ml3.json` | 新增（示例配置） |
-| `tests/test_harness_v2.py` | 新增（32 个测试） |
+| `tests/test_harness_v2_tools.py`、`tests/test_harness_v2_semantics.py` | 新增（12 + 28 个测试） |
 | `docs/Harness反思与改进.md`、`docs/研究调度提示词.md`、`docs/研究调度运行手册.md`、`docs/当前研究目标.md`、`docs/研究验收标准.md`、`docs/harness/目标与评价.md` | 修改 |
 | `docs/harness/v2运行说明.md` | 新增 |
 | 其余 `docs/`、`engine/research_guidance.py`、`tests/test_research_harness.py` | 未改，仅作对照 |
@@ -28,7 +57,7 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 
 本地落地顺序：
 
-1. 覆盖文件后先跑 `python -X utf8 -B -m unittest discover -s tests -p "test_harness_v2.py" -v`（这边 32 个全过）。
+1. 合并后先跑 `python -X utf8 -B -m unittest discover -s tests -p "test_harness_v2_*.py" -v`（这边 40 个全过）。
 2. 再跑原有全套测试。原套件依赖 `tests/test_research_frontier.py`，它不在证据包里，所以我这边**没能运行**。预计会有一批用例需要按 v2 语义更新，见文末“已知限制”第 1 条。
 3. 一切按你们的规则在**下一合法未冻结边界**生效：在途批次、旧 ENGINE、旧 REPORT 和旧哈希都不动。
 
@@ -51,7 +80,7 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 
 ## 逐项修改
 
-### 1. 回放里“没记录的选择”改为悲观计分（`research_scheduler.py`：`replay`、`rrsi_compare`、`dominates`）
+### 1. 回放里“没记录的选择”改为悲观计分（`--replay-semantics v2` 时）（`research_scheduler.py`：`replay`、`rrsi_compare`、`dominates`）
 
 **改了什么。** 候选规则在回放中选到历史上没跑过的分支时，v1 把整个候选判为不可比较（`unknown_quality_or_unobserved_path`），同时把成本记为未知。v2 改为：这次选择不揭示任何结果、不增加已回答问题，但计一次请求（`requests = 揭示节点 + 未记录选择`），并按该世界已观测节点中的最高成本计费。一条回放里这类选择超过一半时，记 `insufficient_observed_coverage`，仍不可比较。
 
@@ -59,7 +88,7 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 
 **验证。** `test_pessimistic_cost_charge_in_replay`、`test_unrecorded_choices_*`、`test_mostly_unrecorded_replay_stays_incomplete`。用 v2 规则重判证据包里已存的 2,330 个候选指标：可比较的从 0 个变为 634 个，其中 206 个在开发集上严格占优。**这 206 个全部是“同样质量、请求更少”的动作顺序调整，没有一个提高了质量。** 也就是说，修好评估后，调度层这套动作级规则语言的杠杆仍然很小，真正的杠杆在第 6—14 项。
 
-### 2. 成本未知不再阻止试点资格（`rrsi_compare`、`comparable_cost`）
+### 2. 成本未知不再阻止试点资格（`--replay-semantics v2` 时）（`rrsi_compare`、`comparable_cost`）
 
 **改了什么。** v1 只要有一方成本未知就记 `unknown_total_cost` 并拒绝。v2：双方都测得 `total_seconds` 就用它；否则双方都测得 `measured_seconds` 就用它；都没有则在 `notes` 记 `cost_unknown_not_blocking`，不拒绝，但成本也不能算作优势。已知成本上升仍然拒绝。
 
@@ -67,7 +96,7 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 
 **验证。** `test_unknown_cost_is_flagged_not_blocking`、`test_known_cost_increase_still_rejects`、`test_measured_seconds_used_when_total_is_missing`。
 
-### 3. 试点资格只要求保留世界干净（`cycle`）
+### 3. 试点资格只要求保留世界干净（`--replay-semantics v2` 时）（`cycle`）
 
 **改了什么。** v1 要求**所有**世界（包括开发世界）都是 `prospective` 且没有任何限制，保留集还要严格占优。v2 改为：开发世界上严格占优，且至少有一个干净的保留世界（`prospective`、无限制）不退化。
 
@@ -93,7 +122,7 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 
 **验证。** `test_validation_folds_decide_and_are_masked`（可见窗口更好、验证 1/3 折胜出 → fail；遮蔽版里没有任何验证数字；2026 行被忽略）、`test_overlapping_or_sealed_folds_are_rejected`、`test_development_gain_without_walkforward_pass_is_not_an_improvement`。
 
-### 6. H3 配对比较改成统计判定（`research_harness.py`：`compare_attempts`、`decision_rule`、`review_round`）
+### 6. H3 配对比较改成统计判定（计划声明 `decision_rule` 时）（`research_harness.py`：`compare_attempts`、`decision_rule`、`review_round`）
 
 **改了什么。** v1 规则是：任何案例的任何判据从通过变成不通过就拒绝；成本必须完整；有一次失败或未知就整轮不可比较。v2 规则 `paired_sign_wilson_v1`：
 - 每个案例比较双方通过的判据个数，多为胜、少为负、相等为平；
@@ -107,11 +136,11 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 
 **验证。** `test_one_noisy_regression_no_longer_vetoes_a_clear_gain`（13 胜 1 负 2 平：v1 会拒，v2 接受）、`test_small_or_balanced_samples_do_not_pass`、`test_critical_check_is_a_hard_stop`、`test_failed_candidate_attempt_counts_as_loss`（11 胜 5 失败不通过）、`test_known_cost_saving_without_losses_is_a_gain`、`test_wilson_lower_bound_thresholds`。
 
-### 7. 候选上限 2→4，案例下限：开发 16、试点 8（`initialize`、`decision_rule`）
+### 7. 候选上限 2→4，案例下限：开发 16、试点 8（计划声明 `decision_rule` 时）（`initialize`、`decision_rule`）
 
 **为什么。** 你说得对，任务不贵。名额不再是瓶颈，统计功效才是：少于 16 个案例时，Wilson 规则几乎不可能通过。这个下限对真实轮次不能调低，只有合成夹具可以用 1 个案例。代价是每轮要多做生成；Rethinking Harness Evolution 的提醒是，这类搜索本身也要算进成本，所以第 14 项用在线交替对照，和“直接多跑几轮”做对比。
 
-### 8. 候选版本包的泄漏扫描（`bundle_leakage`、`proposal_record`）
+### 8. 候选版本包的泄漏扫描（计划声明 `decision_rule` 时）（`bundle_leakage`、`proposal_record`）
 
 **改了什么。** 候选版本包里**新增**的提示词或生成问题，只要出现证券代码（600519、sz000001、600519.XSHG 等）或具体日期（2024-02-05、20240205、2024年2月），提案就记 `accepted=false`，并在 `leakage` 字段列出位置，不进入评价。年份本身（如“2023 年验证段”）和普通数字（如“300000 字符”）不算。
 
@@ -119,9 +148,9 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 
 **验证。** `test_codes_and_dates_in_a_new_prompt_are_flagged`、`test_plain_numbers_and_years_are_not_flagged`、`test_default_bundle_is_leak_free`。
 
-### 9. 独立复核必须换模型家族（`proposal_record`，`research_harness_critic.v2`）
+### 9. 记录复核者是否与生成者同一模型家族（2026-10-17 起只记录、不阻止）
 
-**改了什么。** 开发和试点轮次的复核文件必须是 v2，写明 `verifier_model`，且它和生成 Agent 不能是同一模型家族：gpt-6.1-sol 和 gpt-6-astra 同属一家，claude-* 或 deepseek-* 算不同家。合成夹具仍可用 v1。
+**改了什么。** 复核文件可以写 `verifier_model`（`research_harness_critic.v2`）。v2 规则下，程序记录它和生成 Agent 是否属于同一模型家族（`critic_independence`：same_family／cross_family／unknown），不阻止提案：gpt-6.1-sol 和 gpt-6-astra 同属一家，claude-* 或 deepseek-* 算不同家。是否强制异模型复核，需要你另行决定。
 
 **为什么。** ML3 的 12 个审查会话全部是生成者自己用的 gpt-6.1-sol，B86 也写明审稿人不是独立作者。同一个模型换个角色，盲点是一样的。你们 ML2 已经在用 Claude，DeepSeek 也有现成的调用记录。
 
@@ -136,7 +165,7 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 - 候选要写验证段上的预期表现，不得写具体证券、日期或事后挑出的事件，先查已关闭表达清单；
 - 生成问题从 4 个增加到 6 个。
 
-GUARD 相应增加了三行固定约束。理由同第 5、8、12 项。
+GUARD（固定约束）最初加了三行，2026-10-17 已恢复原文：这些要求放在可版本化、可比较的默认版本包里更合适，不再硬编码。理由同第 5、8、12 项。
 
 ### 11. 计时工具（新增 `research_timing.py`）
 
@@ -189,11 +218,11 @@ GUARD 相应增加了三行固定约束。理由同第 5、8、12 项。
 
 ---
 
-## 需要你确认的三件事
+## 需要你决定的事（2026-10-17 更新）
 
-1. **ML3 的线内目标。** 我在 `当前研究目标.md` 里把“在同一窗口上比 E11J 再高 5 个百分点”这类目标改成了“滚动验证通过且不低于父本”，原文本保留为历史合同。改线内目标属于你的授权范围，你不同意的话，删掉那一段即可。
-2. **复核换模型家族会增加调用成本。** 每次 harness 复核要多调一次 Claude 或 DeepSeek。
-3. **结构线和旧 ML 的 2026 不完全干净。** 将来对这两条线做 2026 确认时，需要在结论里披露这一点。
+1. **各线目标是否改为以滚动验证为准。** 我已撤回对 `当前研究目标.md` 的修改。滚动验证只在批次边界冻结 `walkforward_contract` 后生效，建议先在一条线上试用，再决定是否作为晋级依据。
+2. **是否强制异模型复核。** 现在只记录，不阻止。
+3. **结构线和旧 ML 的 2026 不完全干净。** 这是事实披露，不是新规则；将来对这两条线做 2026 确认时，需要在结论里写明。
 
 ## 没有改的
 
@@ -203,7 +232,7 @@ GUARD 相应增加了三行固定约束。理由同第 5、8、12 项。
 
 ## 已知限制
 
-1. **原有测试套件没有跑。** `tests/test_research_harness.py` 依赖证据包里没有的 `test_research_frontier.py`。预计需要更新的用例：
+1. **原有测试套件没有跑。** `tests/test_research_harness.py` 依赖证据包里没有的 `test_research_frontier.py`。（2026-10-17：默认已改回 v1，下面这些用例只在开启 v2 时才相关。）原先预计需要更新的用例：
    - 用 `kind=development` 加 1 个案例的计划，v2 要求至少 16 个案例，或者改用 `kind=synthetic`；
    - 真实轮次的复核文件要换成 v2，并带一个和 `synthetic-test-model` 不同家族的 `verifier_model`；
    - 断言“任一判据退化即拒”“成本未知即拒”“单未决策”的用例。

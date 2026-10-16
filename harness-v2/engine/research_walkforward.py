@@ -48,6 +48,9 @@ DEFAULT_CONTRACT = {
     "max_validation_mdd_pct": 20.0,
     "annualization_days": 250,
     "min_rows_per_window": 60,
+    # Rows per weekday in each window. A-share years trade about 242 of about 261 weekdays (0.93);
+    # a candidate that keeps only some rows would otherwise annualize the same growth over fewer days.
+    "min_calendar_coverage": 0.85,
     "mask_validation": True,
 }
 BUCKETS = ((-math.inf, -10, "<-10pp"), (-10, -2, "-10..-2pp"), (-2, 2, "-2..+2pp"),
@@ -85,6 +88,8 @@ def validate_contract(contract):
         previous_end = f1
     if not 1 <= contract["min_fold_wins"] <= len(folds):
         raise ValueError("min_fold_wins outside fold count")
+    if not 0 <= contract.get("min_calendar_coverage", 0.85) <= 1:
+        raise ValueError("min_calendar_coverage must be within 0..1")
     return contract
 
 
@@ -121,12 +126,25 @@ def load_equity(path, seal):
     return kept, len(rows) - len(kept)
 
 
-def window_metrics(rows, start, end, days, min_rows):
+def weekdays(start, end):
+    count, d = 0, start
+    while d <= end:
+        count += d.weekday() < 5
+        d = date.fromordinal(d.toordinal() + 1)
+    return count
+
+
+def window_metrics(rows, start, end, days, min_rows, min_coverage=0.0):
     """Annualized return and max drawdown of one window, rebased on the prior close."""
     start, end = day(start), day(end)
     inside = [(d, v) for d, v in rows if start <= d <= end]
+    coverage = len(inside) / max(1, weekdays(start, end))
     if len(inside) < min_rows:
-        return {"rows": len(inside), "annual_return_pct": None, "mdd_pct": None, "status": "insufficient_rows"}
+        return {"rows": len(inside), "annual_return_pct": None, "mdd_pct": None, "status": "insufficient_rows",
+                "calendar_coverage": coverage}
+    if coverage < min_coverage:
+        return {"rows": len(inside), "annual_return_pct": None, "mdd_pct": None, "status": "calendar_gap",
+                "calendar_coverage": coverage}
     before = [v for d, v in rows if d < start]
     base = before[-1] if before else inside[0][1]
     periods = len(inside) if before else len(inside) - 1
@@ -137,7 +155,7 @@ def window_metrics(rows, start, end, days, min_rows):
         peak = max(peak, value)
         worst = max(worst, 1 - value / peak)
     return {"rows": len(inside), "annual_return_pct": annual, "mdd_pct": worst * 100,
-            "total_return_pct": (growth - 1) * 100, "status": "ok"}
+            "total_return_pct": (growth - 1) * 100, "status": "ok", "calendar_coverage": coverage}
 
 
 def bucket(delta):
@@ -149,14 +167,22 @@ def evaluate(contract, candidate_path, parent_path):
     seal = day(contract["seal_start"])
     cand, cand_sealed = load_equity(candidate_path, seal)
     par, par_sealed = load_equity(parent_path, seal)
+    # Both arms must be scored on one trading calendar; otherwise dropping rows from the
+    # candidate (or the parent) changes its annualization and can manufacture fold wins.
+    only_cand = sorted({d for d, _ in cand} - {d for d, _ in par})
+    only_par = sorted({d for d, _ in par} - {d for d, _ in cand})
+    if only_cand or only_par:
+        raise ValueError(f"candidate and parent calendars differ: {len(only_cand)} dates only in candidate, "
+                         f"{len(only_par)} only in parent (first: {(only_cand or only_par)[0]})")
     days, min_rows = contract["annualization_days"], contract["min_rows_per_window"]
+    coverage = contract.get("min_calendar_coverage", 0.85)
     visible = {"window": contract["visible"],
-               "candidate": window_metrics(cand, *contract["visible"], days, min_rows),
-               "parent": window_metrics(par, *contract["visible"], days, min_rows)}
+               "candidate": window_metrics(cand, *contract["visible"], days, min_rows, coverage),
+               "parent": window_metrics(par, *contract["visible"], days, min_rows, coverage)}
     folds, wins, deltas, mdd_ok, complete = [], 0, [], True, True
     for fold in contract["folds"]:
-        val_c = window_metrics(cand, *fold["window"], days, min_rows)
-        val_p = window_metrics(par, *fold["window"], days, min_rows)
+        val_c = window_metrics(cand, *fold["window"], days, min_rows, coverage)
+        val_p = window_metrics(par, *fold["window"], days, min_rows, coverage)
         known = val_c["status"] == val_p["status"] == "ok"
         delta = val_c["annual_return_pct"] - val_p["annual_return_pct"] if known else None
         fold_mdd_ok = known and val_c["mdd_pct"] <= contract["max_validation_mdd_pct"]

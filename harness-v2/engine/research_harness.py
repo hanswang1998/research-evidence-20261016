@@ -48,9 +48,6 @@ GUARD = """固定执行约束（候选提示词不能覆盖）：
 按冻结模型和预算生成候选；不能修改评分器、授权、交易规则或已经冻结的文件。
 输出仍使用原 research_frontier.v1 与 SPEC；各候选保留来源、时点和最小区分检验。
 代码接通、Agent 实际使用、前瞻方法效果、经济改善分别报告。
-候选以滚动验证段的表现为准，开发窗口内的收益提高本身不是晋级依据；
-不得把具体证券代码、具体日期或事后挑出的事件写成规则；2026 封存段不读取。
-先读本线状态摘要（line digest），再按需打开原件；不重读未变化的全量历史。
 """
 
 
@@ -98,14 +95,24 @@ def wilson_lower(successes, trials, z):
     return (centre - margin) / denominator
 
 
+LEGACY_RULE = {"rule": "legacy_v1"}
+
+
 def decision_rule(s, spec):
-    """Resolve the frozen paired-comparison rule; defaults depend on the round kind."""
+    """Resolve the frozen paired-comparison rule.
+
+    Without ``decision_rule`` in the plan the original v1 rule applies unchanged
+    (1-12 cases, at most 2 candidates, any regressed check rejects). Declaring
+    ``{"rule": "paired_sign_wilson_v1", ...}`` opts into the v2 statistical rule.
+    """
+    supplied = spec.get("decision_rule")
+    if supplied is None:
+        return dict(LEGACY_RULE)
     rule = {"rule": DECISION_RULE, "min_cases": MIN_CASES[spec["kind"]], "confidence": 0.9,
             "critical_checks": [], "max_unpaired_share": 0.2, "cost_tolerance": 0.0}
-    supplied = spec.get("decision_rule")
     if supplied is not None:
         s.require(isinstance(supplied, dict) and set(supplied) <= set(rule) and
-                  supplied.get("rule", DECISION_RULE) == DECISION_RULE, "invalid decision rule")
+                  supplied.get("rule") == DECISION_RULE, "decision_rule must name rule paired_sign_wilson_v1")
         rule.update(supplied)
     s.require(type(rule["min_cases"]) is int and 1 <= rule["min_cases"] <= MAX_CASES, "invalid min_cases")
     if spec["kind"] != "synthetic":
@@ -288,20 +295,25 @@ def initialize(s, spec_path, output):
     s.require(set(limits) == {"context_chars", "resource_seconds", "candidates"} and
               type(limits["context_chars"]) is int and 1000 <= limits["context_chars"] <= 120000 and
               s.number(limits["resource_seconds"]) and limits["resource_seconds"] > 0 and
-              type(limits["candidates"]) is int and 1 <= limits["candidates"] <= MAX_CANDIDATES,
+              type(limits["candidates"]) is int and 1 <= limits["candidates"],
               "invalid frozen harness limits")
     rule = decision_rule(s, spec)
+    legacy = rule["rule"] == "legacy_v1"
+    s.require(limits["candidates"] <= (2 if legacy else MAX_CANDIDATES),
+              "at most 2 candidates (v1) or 4 with decision_rule paired_sign_wilson_v1")
     selector = spec["selector"]
     s.require(selector["rule"] in {"least_served_family_v1", "bottleneck_evidence_cost_v1"} and
               set(selector) == ({"rule", "selection_contract"} if selector["rule"] == "bottleneck_evidence_cost_v1" else {"rule"}),
               "freeze the existing selector; no simultaneous selector experiment")
     if selector.get("selection_contract"):
         s.bound(selector["selection_contract"])
-    s.require(isinstance(spec["cases"], list) and 1 <= len(spec["cases"]) <= MAX_CASES, "bounded matched cases required")
-    # v1 allowed 1-12 cases judged by "no check may regress": with one noisy run per case
-    # that rule rejects good edits on noise and cannot separate real gains from luck.
-    s.require(len(spec["cases"]) >= rule["min_cases"],
-              f"{spec['kind']} round needs at least {rule['min_cases']} paired cases")
+    s.require(isinstance(spec["cases"], list) and 1 <= len(spec["cases"]) <= (12 if legacy else MAX_CASES),
+              "bounded matched cases required")
+    if not legacy:
+        # v1's "no check may regress" over 1-12 single runs rejects good edits on noise and
+        # cannot separate real gains from luck; the opt-in statistical rule needs more cases.
+        s.require(len(spec["cases"]) >= rule["min_cases"],
+                  f"{spec['kind']} round needs at least {rule['min_cases']} paired cases")
     case_ids, case_hashes = set(), set()
     for entry in spec["cases"]:
         s.require(set(entry) == {"input", "evaluation_contract"}, "invalid paired case")
@@ -334,6 +346,7 @@ def initialize(s, spec_path, output):
         s.require(spec["agent_model"] == old["agent_model"] and spec["selector"] == old["selector"] and
                   spec["cost_contract"] == old["cost_contract"] and spec["limits"] == old["limits"],
                   "pilot changed fixed model, selector, costs or budgets")
+        s.require(spec.get("decision_rule") == old.get("decision_rule"), "pilot changed the frozen decision rule")
         old_cases = [case(s, e["input"], old["branch"]) for e in old["cases"]]
         evaluations = [evaluation_shape(s, entry["evaluation_contract"]) for entry in old["cases"]]
         for entry in spec["cases"]:
@@ -389,11 +402,13 @@ def initialize(s, spec_path, output):
     obj = {**spec, "schema": "research_harness_round.v1", "at": s.now(), "spec": spec_ref,
            "engine": s.reference(directory / "ENGINE.py"), "runtime": s.reference(directory / "HARNESS.py"),
            "guidance": guidance_refs, "guidance_runtime": s.reference(directory / "GUIDANCE_READER.py"),
-           "decision_rule_resolved": rule,
+
            "artifact_plan": {"owned_files_upper_bound": 12 + limits["candidates"] + 3 * (1 + limits["candidates"]) * len(spec["cases"]),
                              "estimated_logical_bytes": 300000 + (1 + limits["candidates"]) * len(spec["cases"]) * (4 * limits["context_chars"] + 30000),
                              "reuse": "source evidence, bundles, cases, SPECs and external receipts remain hash references"},
            "execution_authorized_by_this_file": False}
+    if not legacy:
+        obj["decision_rule_resolved"] = rule
     s.write(directory / "CONTRACT.json", obj)
     reflection = reflection_payload(s, s.reference(directory / "CONTRACT.json"), obj)
     s.write(directory / "REFLECTION_TASK.json", reflection)
@@ -472,19 +487,21 @@ def proposal_record(s, directory, cfg, proposal_ref, critic_ref):
     refs(s, critic["evidence"], "critic evidence")
     s.require(set(critic["checks"]) == CRITIC_CHECKS and all(type(v) is bool for v in critic["checks"].values()),
               "invalid critic checks")
-    if cfg["kind"] != "synthetic":
-        # The 2026-10-16 audit found all 12 ML3 review sessions on the generating model itself.
-        # Role separation on one model shares its blind spots; require another vendor family.
-        s.require(critic["schema"] == "research_harness_critic.v2", "real rounds need research_harness_critic.v2")
-        nonempty(s, critic.get("verifier_model"), "critic verifier_model")
-        s.require(model_family(critic["verifier_model"]) != model_family(cfg["agent_model"]),
-                  "independent critic must use a different model family than the generating Agent")
-    leakage = bundle_leakage(original, candidate)
-    accepted = all(critic["checks"].values()) and not leakage
-    return {"schema": "research_harness_candidate.v1", "contract": contract_ref, "input": proposal_ref,
-           "review": critic_ref, "bundle": proposal["bundle"], "component": changed[0],
-           "expected_effect": prediction, "accepted": accepted, "leakage": leakage,
-           "critic_model_family": model_family(critic.get("verifier_model")) if critic.get("verifier_model") else None}
+    accepted = all(critic["checks"].values())
+    record = {"schema": "research_harness_candidate.v1", "contract": contract_ref, "input": proposal_ref,
+              "review": critic_ref, "bundle": proposal["bundle"], "component": changed[0],
+              "expected_effect": prediction, "accepted": accepted}
+    if resolved_rule(cfg)["rule"] != "legacy_v1":
+        # Opt-in v2: a bundle that writes security codes or dates is rejected before evaluation.
+        # Critic model family is recorded so reviewers can see same-model review; it never blocks.
+        leakage = bundle_leakage(original, candidate)
+        verifier_model = critic.get("verifier_model")
+        record.update(accepted=accepted and not leakage, leakage=leakage,
+                      critic_model_family=model_family(verifier_model) if verifier_model else None,
+                      critic_independence=("unknown" if not verifier_model else
+                                           "same_family" if model_family(verifier_model) == model_family(cfg["agent_model"])
+                                           else "cross_family"))
+    return record
 
 
 def variants(s, directory, cfg):
@@ -654,15 +671,52 @@ def evaluate_attempt(s, obj, cfg):
 
 
 def resolved_rule(cfg):
-    """Rule frozen in the contract; contracts written before v2 get the v2 defaults."""
-    rule = cfg.get("decision_rule_resolved")
-    if rule:
-        return rule
-    return {"rule": DECISION_RULE, "min_cases": MIN_CASES.get(cfg.get("kind"), 16), "confidence": 0.9,
-            "critical_checks": [], "max_unpaired_share": 0.2, "cost_tolerance": 0.0}
+    """Rule frozen in the contract; contracts without one use the original v1 rule."""
+    return cfg.get("decision_rule_resolved") or dict(LEGACY_RULE)
+
+
+def compare_attempts_v1(s, baseline, candidate, cfg):
+    reasons = []
+    if not baseline or not candidate:
+        return {"accepted": False, "state": "incomplete", "reasons": ["missing paired attempt"]}
+    if any(run["status"] != "completed" for run in baseline + candidate):
+        return {"accepted": False, "state": "failed_or_unknown", "reasons": ["paired attempts not all completed"]}
+    old_bits = [value for run in baseline for _, value in sorted(run["checks"].items())]
+    new_bits = [value for run in candidate for _, value in sorted(run["checks"].items())]
+    s.require(len(old_bits) == len(new_bits), "paired checks mismatch")
+    if any(old and not new for old, new in zip(old_bits, new_bits)):
+        reasons.append("previously passing check regressed")
+    costs = [run["cost"]["all_in_method_cost_seconds"] for run in baseline + candidate]
+    if any(value is None for value in costs):
+        return {"accepted": False, "state": "unknown_cost", "reasons": reasons + ["incomplete total costs"]}
+    old_cost = sum(costs[:len(baseline)])
+    new_cost = sum(costs[len(baseline):])
+    s.require(s.number(old_cost) and s.number(new_cost), "nonfinite paired total cost")
+    if any(value > cfg["limits"]["resource_seconds"] for value in costs):
+        reasons.append("attempt exceeded frozen resource budget")
+    if new_cost > old_cost:
+        reasons.append("total cost increased")
+    improved = sum(new_bits) > sum(old_bits) or new_cost < old_cost
+    if not improved:
+        reasons.append("no strict measured advantage")
+    return {"accepted": not reasons, "state": "gain" if not reasons else "no_gain", "reasons": reasons,
+            "passed_checks": [sum(old_bits), sum(new_bits)], "total_seconds": [old_cost, new_cost],
+            "check_vector": new_bits, "cost": new_cost}
+
+
+def dominates_v1(a, b):
+    preserves_checks = all(x >= y for x, y in zip(a["check_vector"], b["check_vector"]))
+    strict_gain = a["check_vector"] != b["check_vector"] or a["cost"] < b["cost"]
+    return preserves_checks and a["cost"] <= b["cost"] and strict_gain
 
 
 def compare_attempts(s, baseline, candidate, cfg):
+    if resolved_rule(cfg)["rule"] == "legacy_v1":
+        return compare_attempts_v1(s, baseline, candidate, cfg)
+    return compare_attempts_v2(s, baseline, candidate, cfg)
+
+
+def compare_attempts_v2(s, baseline, candidate, cfg):
     """Paired sign test over frozen cases.
 
     v1 rejected a candidate if any single check in any case regressed, and if any cost
@@ -705,14 +759,19 @@ def compare_attempts(s, baseline, candidate, cfg):
     lower = wilson_lower(wins, decided, CONFIDENCE_Z[rule["confidence"]])
     costs = [run["cost"]["all_in_method_cost_seconds"] for run in baseline + candidate]
     cost_known = all(value is not None for value in costs)
+    # Every measured attempt is held to the frozen budget, whether or not other costs are known.
+    if any(value is not None and value > cfg["limits"]["resource_seconds"] for value in costs):
+        reasons.append("attempt exceeded frozen resource budget")
     old_cost = new_cost = None
     if cost_known:
         old_cost, new_cost = sum(costs[:len(baseline)]), sum(costs[len(baseline):])
         s.require(s.number(old_cost) and s.number(new_cost), "nonfinite paired total cost")
-        if any(value > cfg["limits"]["resource_seconds"] for value in costs):
-            reasons.append("attempt exceeded frozen resource budget")
         if new_cost > old_cost * (1 + rule["cost_tolerance"]):
             reasons.append("total cost increased")
+    elif cfg.get("kind") == "prospective_pilot":
+        # Unknown cost may earn a development round a pilot, but a pilot is where cost is measured;
+        # it cannot be judged supported while any attempt's cost is still unknown.
+        reasons.append("bounded pilot needs complete measured costs")
     check_gain = decided > 0 and lower > 0.5
     cost_gain = cost_known and losses == 0 and new_cost < old_cost
     if not (check_gain or cost_gain):
@@ -784,14 +843,22 @@ def review_round(s, directory, publish=True, evolution_cost_receipt=None):
                             "prediction": prediction, "prediction_outcome": prediction_outcome(prediction, compared)})
     for ref, prop in proposals(s, directory, cfg):
         if not prop["accepted"]:
-            reasons = ["proposal review rejected"]
+            item = {"bundle": prop["bundle"], "proposal": ref, "accepted": False,
+                    "state": "critic_rejected", "reasons": ["proposal review rejected"]}
             if prop.get("leakage"):
-                reasons.append("candidate bundle writes security codes or dates")
-            comparisons.append({"bundle": prop["bundle"], "proposal": ref, "accepted": False,
-                                "state": "critic_rejected", "reasons": reasons, "leakage": prop.get("leakage", [])})
+                item["reasons"].append("candidate bundle writes security codes or dates")
+                item["leakage"] = prop["leakage"]
+            comparisons.append(item)
     eligible = [item for item in comparisons if item["accepted"]]
     complete = all(measurements[ref["sha256"]] for ref, _ in all_variants)
-    winner = min(eligible, key=preference) if complete and eligible else None
+    winner = None
+    if resolved_rule(cfg)["rule"] == "legacy_v1":
+        best = [item for item in eligible if not any(dominates_v1(other, item) for other in eligible)]
+        if complete and best and all(item["check_vector"] == best[0]["check_vector"] and item["cost"] == best[0]["cost"]
+                                     for item in best):
+            winner = min(best, key=lambda item: item["bundle"]["sha256"])
+    elif complete and eligible:
+        winner = min(eligible, key=preference)
     decision = "retain_incumbent"
     if cfg["kind"] == "prospective_pilot":
         decision = "supported_in_bounded_pilot" if winner else "rollback"
