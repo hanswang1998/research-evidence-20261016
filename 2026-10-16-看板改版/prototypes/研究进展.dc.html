@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>研究进展 · ML3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+a{color:#456eea;text-decoration:none}a:hover{color:#2f55d4}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 900px; background: #ffffff; color: #303030; font-family: Inter, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 14px; line-height: 1.5">
+
+<nav aria-label="工作区导航" style="flex: 1 1 176px; max-width: 176px; min-width: 176px; box-sizing: border-box; background: #f6f6f6; padding: 20px 12px 14px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 22px">
+<div style="width: 28px; height: 28px; border-radius: 7px; background: #262626; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px">R</div>
+<div style="display: flex; flex-direction: column; line-height: 1.3"><span style="font-weight: 600; font-size: 14px">RSI</span><span style="font-size: 10px; color: #8b8b8b">研究工作区</span></div>
+</div>
+<div style="font-size: 11px; color: #8b8b8b; padding: 0 10px 8px">工作台</div>
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; background: #e9e9e9; color: #303030; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 13.5h12M3 11l3.5-4 3 2.5L14 4"></path></svg>研究进展</a>
+<a href="Runtime.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 4.5V8l2.5 1.5"></path></svg>全局运行</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 13.5h12M4.5 11V7M8 11V4M11.5 11V8"></path></svg>策略回测</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"></rect><rect x="9" y="9" width="5" height="5" rx="1"></rect><path d="M4.5 7v4.5H9"></path></svg>RSI Harness</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="4.5" width="12" height="9" rx="1.5"></rect><path d="M5.5 4.5V3h5v1.5M2 8.5h12"></path></svg>工具管理</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3h3"></path></svg>近期动态</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 5l3 3-3 3M8 11.5h5"></path></svg>研究指挥</a>
+</nav>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 24px; border-bottom: 1px solid #eaeaea">
+<div style="display: flex; align-items: center; gap: 14px; font-size: 13px"><span style="color: #8b8b8b">工作区</span><span style="color: #c4c4c4">/</span><span>研究进展</span></div>
+<div style="display: flex; align-items: center; gap: 8px">
+<div style="display: flex; flex-direction: column; align-items: flex-end; font-size: 10px; color: #777; line-height: 1.4; margin-right: 6px"><span style="display: flex; align-items: center; gap: 5px"><span style="width: 6px; height: 6px; border-radius: 3px; background: #e8a747"></span>实时更新</span><span>10/16 16:55</span></div>
+<button type="button" style="font-size: 12px; padding: 6px 10px; border: 1px solid #e3e3e3; border-radius: 7px; background: #fff; color: #444">刷新</button>
+<button type="button" style="font-size: 12px; padding: 6px 10px; border: 1px solid #e3e3e3; border-radius: 7px; background: #fff; color: #444">保存快照</button>
+<button type="button" style="font-size: 12px; padding: 6px 10px; border: 1px solid #e3e3e3; border-radius: 7px; background: #fff; color: #444">退出</button>
+</div>
+</header>
+
+<main style="box-sizing: border-box; width: 100%; max-width: 1264px; padding: 18px 24px 20px; display: flex; flex-direction: column; gap: 14px">
+
+<!-- 标题 + 研究线 -->
+<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px">
+<div style="display: flex; align-items: center; gap: 10px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 650; color: #243957">ML3 研究进展</h2>
+<span style="font-size: 10px; padding: 3px 7px; border-radius: 5px; background: #eaf8f2; color: #138565">研究接续</span>
+</div>
+<div role="group" aria-label="研究线" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{lines}}" as="ln" hint-placeholder-count="10">
+<button type="button" onClick="{{ln.pick}}" aria-pressed="{{ln.on}}" style="{{ln.style}}"><span style="width: 6px; height: 6px; border-radius: 3px; background: {{ln.dot}}"></span>{{ln.name}}</button>
+</sc-for>
+</div>
+</div>
+
+<!-- 分页 -->
+<div role="tablist" aria-label="研究进展分页" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #eaeaea">
+<div style="display: flex; gap: 22px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+<button type="button" role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="{{t.style}}">{{t.name}}<span style="{{t.countStyle}}">{{t.count}}</span></button>
+</sc-for>
+</div>
+<span style="font-size: 11px; color: #6b7891">全部历史 · 10/16 16:55</span>
+</div>
+
+<!-- ① 概览 -->
+<sc-if value="{{isOverview}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 14px">
+<section aria-label="本线现状" style="border: 1px solid #eaeaea; border-radius: 12px; background: #fff">
+<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding: 14px 22px 0">
+<h3 style="margin: 0; font-size: 15px; font-weight: 650; color: #243957">还没有候选获准替代父本 E11J</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" onClick="{{goVerify}}" style="display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 10px; border-radius: 7px; border: 1px solid #f3e2bf; background: #fff9ee; color: #855d1a; cursor: pointer"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="7" cy="7" r="5.5"></circle><path d="M7 4v3.5M7 9.6v.1"></path></svg>3 个合格候选不低于父本，待核实 ›</button>
+<button type="button" onClick="{{goRecords}}" style="display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 10px; border-radius: 7px; border: 1px solid #f3d3d4; background: #fdf3f3; color: #a24246; cursor: pointer"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M7 2l5.5 9.5h-11z"></path><path d="M7 6v2.5M7 10v.1"></path></svg>最近 7 个账户回撤都超 20% ›</button>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); padding: 14px 0 16px">
+<div style="padding: 0 22px; border-right: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 6px"><span style="font-size: 11px; color: #66758f">保留父本 · E11J</span><span style="font-size: 10px; padding: 2px 6px; border-radius: 5px; background: #edf3ff; color: #5876b3">当前保留</span></div>
+<div style="font-size: 25px; font-weight: 600; color: #243957; letter-spacing: -0.6px; font-variant-numeric: tabular-nums">316.42<small style="font-size: 12px; font-weight: 400; margin-left: 2px">%</small></div>
+<div style="font-size: 12px; color: #66758f">回撤 15.55% · Calmar 20.3</div>
+</div>
+<div style="padding: 0 22px; border-right: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 6px"><span style="font-size: 11px; color: #66758f">最好候选 · B86:H86</span><span style="font-size: 10px; padding: 2px 6px; border-radius: 5px; background: #fff6e5; color: #94681f">待核实</span></div>
+<div style="font-size: 25px; font-weight: 600; color: #243957; letter-spacing: -0.6px; font-variant-numeric: tabular-nums">318.33<small style="font-size: 12px; font-weight: 400; margin-left: 2px">%</small></div>
+<div style="font-size: 12px; color: #66758f"><span style="color: #138565">+1.91 pp</span> · 回撤 15.80%</div>
+</div>
+<div style="padding: 0 22px; border-right: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 6px"><span style="font-size: 11px; color: #66758f">最近账户 · B129:P129</span><span style="font-size: 10px; padding: 2px 6px; border-radius: 5px; background: #fcefef; color: #b0474b">回撤超限</span></div>
+<div style="font-size: 25px; font-weight: 600; color: #243957; letter-spacing: -0.6px; font-variant-numeric: tabular-nums">267.14<small style="font-size: 12px; font-weight: 400; margin-left: 2px">%</small></div>
+<div style="font-size: 12px; color: #66758f"><span style="color: #b0474b">−49.28 pp</span> · 回撤 <span style="color: #b0474b">24.42%</span></div>
+</div>
+<div style="padding: 0 22px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 11px; color: #66758f">获准替代父本</div>
+<div style="font-size: 25px; font-weight: 600; color: #243957; letter-spacing: -0.6px; font-variant-numeric: tabular-nums">0<small style="font-size: 13px; font-weight: 400; margin-left: 4px; color: #66758f">/ 56 个有效裁决</small></div>
+<div style="font-size: 12px; color: #66758f">另有 170 个实验臂待核实</div>
+</div>
+</div>
+</section>
+
+<section aria-label="候选与父本的差距" style="border: 1px solid #eaeaea; border-radius: 12px; background: #fff; padding: 14px 22px 12px">
+<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px">
+<div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 650; color: #243957">每个候选离父本有多远</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: #5d6b84">
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 4px; background: #496af2"></span>回撤 ≤ 20%</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 4px; border: 1.5px solid #da6b6e; background: #fff"></span>回撤超过 20%</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 16px; border-top: 1.5px dashed #243957"></span>父本 E11J 316.42%</span>
+</div>
+</div>
+<div role="group" aria-label="视图" style="display: flex; gap: 2px; padding: 3px; background: #f5f6f8; border-radius: 9px">
+<button type="button" onClick="{{viewSeq}}" aria-pressed="{{isSeq}}" style="{{segSeq}}">按批次</button>
+<button type="button" onClick="{{viewRisk}}" aria-pressed="{{isRiskStr}}" style="{{segRisk}}">收益 × 回撤</button>
+</div>
+</div>
+<div style="display: flex; gap: 8px; margin-top: 12px">
+<div aria-hidden="true" style="position: relative; width: 36px; height: 330px; flex: none; font-size: 10px; color: #7d8aa1; font-variant-numeric: tabular-nums">
+<span style="position: absolute; right: 0; top: 25px">320%</span>
+<span style="position: absolute; right: 0; top: 91px">280%</span>
+<span style="position: absolute; right: 0; top: 157px">240%</span>
+<span style="position: absolute; right: 0; top: 223px">200%</span>
+<span style="position: absolute; right: 0; top: 289px">160%</span>
+</div>
+<div style="flex: 1; min-width: 0">
+<div role="img" aria-label="{{chartLabel}}" style="position: relative; height: 330px; border-bottom: 1px solid #dfe3ea">
+<div style="position: absolute; left: 0; right: 0; top: 33px; border-top: 1px solid #f2f3f6"></div>
+<div style="position: absolute; left: 0; right: 0; top: 99px; border-top: 1px solid #f2f3f6"></div>
+<div style="position: absolute; left: 0; right: 0; top: 165px; border-top: 1px solid #f2f3f6"></div>
+<div style="position: absolute; left: 0; right: 0; top: 231px; border-top: 1px solid #f2f3f6"></div>
+<div style="position: absolute; left: 0; right: 0; top: 297px; border-top: 1px solid #f2f3f6"></div>
+<div style="{{zoneStyle}}"></div>
+<span style="{{zoneLabelStyle}}">{{zoneLabel}}</span>
+<div style="position: absolute; left: 0; right: 0; top: 39px; border-top: 1.5px dashed #243957"></div>
+<sc-if value="{{isRisk}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; top: 0; bottom: 0; left: 27.27%; border-left: 1.5px dashed #b0474b"></div>
+<span style="position: absolute; bottom: 6px; left: 27.27%; margin-left: 6px; font-size: 10px; color: #b0474b">回撤上限 20%</span>
+</sc-if>
+<sc-for list="{{points}}" as="p" hint-placeholder-count="40">
+<button type="button" aria-label="{{p.aria}}" onMouseEnter="{{p.enter}}" onFocus="{{p.enter}}" onMouseLeave="{{p.leave}}" onBlur="{{p.leave}}" style="{{p.style}}"></button>
+</sc-for>
+<span style="{{tagStyle}}">H86 · 318.33%</span>
+<sc-if value="{{tip.show}}" hint-placeholder-val="{{ false }}">
+<div style="{{tip.style}}">
+<div style="font-weight: 600; color: #243957; font-size: 12px">{{tip.id}}</div>
+<div style="display: flex; justify-content: space-between; gap: 14px"><span style="color: #66758f">年化</span><span>{{tip.ann}}</span></div>
+<div style="display: flex; justify-content: space-between; gap: 14px"><span style="color: #66758f">与父本</span><span>{{tip.delta}}</span></div>
+<div style="display: flex; justify-content: space-between; gap: 14px"><span style="color: #66758f">回撤</span><span>{{tip.mdd}}</span></div>
+<div style="display: flex; justify-content: space-between; gap: 14px"><span style="color: #66758f">原裁决</span><span>{{tip.res}}</span></div>
+</div>
+</sc-if>
+</div>
+<div aria-hidden="true" style="position: relative; height: 20px; font-size: 10px; color: #7d8aa1">
+<sc-for list="{{xticks}}" as="x" hint-placeholder-count="5">
+<span style="{{x.style}}">{{x.text}}</span>
+</sc-for>
+</div>
+</div>
+</div>
+</section>
+</div>
+</sc-if>
+
+<!-- ② 研究记录 -->
+<sc-if value="{{isRecords}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch">
+<section aria-label="研究记录列表" style="flex: 999 1 520px; min-width: 0; border: 1px solid #eaeaea; border-radius: 12px; background: #fff; overflow: hidden">
+<div style="display: grid; grid-template-columns: 56px minmax(0, 1fr) 84px 92px 56px; gap: 12px; padding: 12px 20px; font-size: 11px; color: #66758f; border-bottom: 1px solid #f0f0f0">
+<span>批次</span><span>研究问题</span><span>结果</span><span style="text-align: right">与父本</span><span style="text-align: right">完成</span>
+</div>
+<div role="list">
+<sc-for list="{{records}}" as="r" hint-placeholder-count="10">
+<button type="button" role="listitem" onClick="{{r.pick}}" aria-current="{{r.on}}" style="{{r.rowStyle}}">
+<span style="font-size: 12px; color: #66758f; font-variant-numeric: tabular-nums">{{r.id}}</span>
+<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{r.title}}</span>
+<span><span style="{{r.badgeStyle}}">{{r.badge}}</span></span>
+<span style="text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: {{r.deltaColor}}">{{r.delta}}</span>
+<span style="text-align: right; font-size: 12px; color: #66758f; font-variant-numeric: tabular-nums">{{r.time}}</span>
+</button>
+</sc-for>
+</div>
+<div style="display: flex; justify-content: space-between; padding: 10px 20px; font-size: 12px; border-top: 1px solid #f0f0f0">
+<span style="color: #66758f">最近 10 条 · 共 127 条</span><a href="#">全部记录 ↗</a>
+</div>
+</section>
+<section aria-label="选中记录详情" style="flex: 1 1 340px; min-width: 0; border: 1px solid #eaeaea; border-radius: 12px; background: #fff; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 12px; color: #66758f">{{sel.id}}</span><span style="{{sel.badgeStyle}}">{{sel.badge}}</span></div>
+<h3 style="margin: 0; font-size: 15px; font-weight: 650; color: #243957">{{sel.title}}</h3>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 12px 0; border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0">
+<div><div style="font-size: 11px; color: #66758f">年化</div><div style="font-size: 18px; font-weight: 600; color: #243957; font-variant-numeric: tabular-nums">{{sel.ann}}</div></div>
+<div><div style="font-size: 11px; color: #66758f">与父本</div><div style="font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; color: {{sel.deltaColor}}">{{sel.delta}}</div></div>
+<div><div style="font-size: 11px; color: #66758f">回撤</div><div style="font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; color: {{sel.mddColor}}">{{sel.mdd}}</div></div>
+</div>
+<div><div style="font-size: 11px; color: #66758f; margin-bottom: 4px">结论</div><div style="font-size: 13px">{{sel.note}}</div></div>
+<div style="font-size: 12px; color: #66758f">完成于 10/16 {{sel.time}} · 账户 {{sel.acct}}</div>
+<div style="display: flex; gap: 16px; font-size: 12px; margin-top: auto"><a href="#">计划 ↗</a><a href="#">结果 ↗</a><a href="#">反思 ↗</a></div>
+</section>
+</div>
+</sc-if>
+
+<!-- ③ 实验与节奏 -->
+<sc-if value="{{isFlow}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: start">
+<section aria-label="实验去向" style="border: 1px solid #eaeaea; border-radius: 12px; background: #fff; padding: 18px 20px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 650; color: #243957">228 个实验臂的去向</h3>
+<div style="font-size: 34px; font-weight: 600; color: #243957; margin-top: 14px; font-variant-numeric: tabular-nums">75%<small style="font-size: 13px; font-weight: 400; color: #66758f; margin-left: 6px">还没核实</small></div>
+<div role="img" aria-label="待核实 170，有效负结果 56，未评分 2，获支持 0" style="display: flex; gap: 2px; height: 10px; margin: 14px 0 16px">
+<div style="flex: 170; background: #b4bdcf; border-radius: 4px 0 0 4px"></div>
+<div style="flex: 56; background: #da6b6e"></div>
+<div style="flex: 2; min-width: 3px; background: #e8a747; border-radius: 0 4px 4px 0"></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px">
+<div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px; color: #4a5568"><span style="width: 8px; height: 8px; border-radius: 2px; background: #b4bdcf"></span>待核实</span><strong style="font-weight: 600">170</strong></div>
+<div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px; color: #4a5568"><span style="width: 8px; height: 8px; border-radius: 2px; background: #da6b6e"></span>有效负结果</span><strong style="font-weight: 600">56</strong></div>
+<div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px; color: #4a5568"><span style="width: 8px; height: 8px; border-radius: 2px; background: #e8a747"></span>未评分</span><strong style="font-weight: 600">2</strong></div>
+<div style="display: flex; justify-content: space-between"><span style="display: flex; align-items: center; gap: 8px; color: #4a5568"><span style="width: 8px; height: 8px; border-radius: 2px; background: #20a782"></span>获支持</span><strong style="font-weight: 600">0</strong></div>
+</div>
+</section>
+<section aria-label="研究节奏" style="border: 1px solid #eaeaea; border-radius: 12px; background: #fff; padding: 18px 20px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h3 style="margin: 0; font-size: 14px; font-weight: 650; color: #243957">每天完成的批次</h3>
+<span style="font-size: 12px; color: #66758f">共 110 批</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; align-items: end; height: 200px; margin-top: 18px">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="5">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%">
+<span style="font-size: 12px; color: #4a5568; font-variant-numeric: tabular-nums">{{d.n}}</span>
+<div style="width: 100%; max-width: 36px; height: {{d.h}}px; background: {{d.color}}; border-radius: 4px 4px 0 0"></div>
+</div>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 8px; font-size: 11px; color: #66758f; text-align: center">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="5"><span>{{d.label}}</span></sc-for>
+</div>
+</section>
+<section aria-label="需要注意" style="border: 1px solid #eaeaea; border-radius: 12px; background: #fff; padding: 18px 0 6px">
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 20px 10px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 650; color: #243957">需要注意</h3>
+<span style="font-size: 10px; padding: 2px 6px; border-radius: 5px; background: #fff6e5; color: #94681f">3</span>
+</div>
+<sc-for list="{{issues}}" as="i" hint-placeholder-count="3">
+<div style="border-top: 1px solid #f2f2f2; padding: 12px 20px">
+<div style="font-size: 13px; font-weight: 550">{{i.title}}</div>
+<div style="font-size: 12px; color: #5d6b84; margin-top: 4px">{{i.detail}}</div>
+</div>
+</sc-for>
+</section>
+</div>
+</sc-if>
+
+<!-- ④ 策略逻辑 -->
+<sc-if value="{{isLogic}}" hint-placeholder-val="{{ false }}">
+<section aria-label="E11J 策略逻辑" style="border: 1px solid #eaeaea; border-radius: 12px; background: #fff; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><h3 style="margin: 0; font-size: 15px; font-weight: 650; color: #243957">保留父本 E11J</h3><span style="font-size: 10px; padding: 2px 6px; border-radius: 5px; background: #edf3ff; color: #5876b3">已核历史版本 · 当前保留待核</span></div>
+<p style="margin: 0; font-size: 14px">继承 H543 的选股、买卖与资金链；谨慎市场里，若前日摸板未封比例 ≥ 0.44，跳过 09:26 新仓。</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px">
+<div style="border: 1px solid #f0f0f0; border-radius: 10px; padding: 14px 16px"><div style="font-size: 11px; color: #66758f; margin-bottom: 6px">保留策略</div><div style="font-size: 13px">继续使用 E11J：H543 父本完整规则加谨慎日炸板潮过滤。</div></div>
+<div style="border: 1px solid #f0f0f0; border-radius: 10px; padding: 14px 16px"><div style="font-size: 11px; color: #66758f; margin-bottom: 6px">ML3 改了什么</div><div style="font-size: 13px">依次检验模型作用位置、资格后排序、目标 / 特征及树模型。</div></div>
+<div style="border: 1px solid #f0f0f0; border-radius: 10px; padding: 14px 16px"><div style="font-size: 11px; color: #66758f; margin-bottom: 6px">怎么比较</div><div style="font-size: 13px">在父本的买卖、预算、现金和退出链下跑完整账户，对照 E11J 与同作用域随机臂。</div></div>
+</div>
+<div>
+<div style="font-size: 11px; color: #66758f; margin-bottom: 6px">局限</div>
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #4a5568">
+<span>· 52 个已验证金融候选的原裁决都是负结果。</span>
+<span>· 2020—2025 已反复开发，2026 封存；随机和删年复利不等于独立确认。</span>
+<span>· 本地 316.42% 与聚宽原生 E1002J 306.22% 口径不同，不是策略提升 10.20 个百分点。</span>
+</div>
+</div>
+<div style="display: flex; gap: 16px; font-size: 12px"><a href="#">CURRENT_RULES ↗</a><a href="#">E11J 结果 ↗</a></div>
+</section>
+</sc-if>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'overview', view: 'seq', hover: null, rec: 'B129', line: 'ml3' };
+  }
+  renderVals() {
+    const s = this.state;
+    const RAW = [[1,194.12,33.06,"B1:M0","n"],[1,183.8,34.08,"B1:M1","n"],[1,145.68,30.93,"B1:M5","n"],[2,303.05,23.62,"B2:P2","n"],[2,165.89,29.19,"B2:S2","n"],[2,289.72,25.05,"B2:SP2","n"],[3,257.66,19.87,"B3:D3","n"],[3,297.48,21.87,"B3:T3","n"],[3,257.8,22.48,"B3:TD3","n"],[5,297.07,15.61,"B5:C5","n"],[5,255.55,28.37,"B5:E5","n"],[6,267.87,24.41,"B6:CM6","n"],[7,270.53,24.41,"B7:DM7","n"],[11,260.12,20.12,"B11:A11","n"],[11,252.41,21.31,"B11:C11","n"],[12,214.43,20.07,"B12:L12","n"],[14,258.26,20.28,"B14:V14","n"],[15,258.91,20.28,"B15:LIQ15","n"],[17,262.59,20.28,"B17:NATR17","n"],[18,241.41,20.28,"B18:DW18","n"],[19,237.51,20.28,"B19:RANGE19","n"],[20,234.7,30.34,"B20:HV20","n"],[21,247.75,19.07,"B21:MID21","n"],[22,246.97,22.25,"B22:RANK22","n"],[24,241.1,21.06,"B24:FB24","n"],[25,262.54,20.77,"B25:ALIGN25","n"],[26,257.6,20.28,"B26:ADX26","n"],[27,208.06,20.69,"B27:LIN27","n"],[29,260.82,20.28,"B29:LOC29","n"],[30,267.26,20.28,"B30:REOPEN30","n"],[31,242.92,25.89,"B31:CMID31","n"],[32,264.28,20.28,"B32:MFI32","n"],[33,257.66,24.42,"B33:PRIOR33","n"],[34,298.85,20.28,"B34:BODY34","n"],[35,252.36,20.28,"B35:PERM35","n"],[36,240.2,17.48,"B36:BMID36","n"],[37,284.69,15.55,"B37:TAIL37","n"],[38,268.38,20.28,"B38:CAP38","n"],[39,262.98,21.71,"B39:EVENT39","n"],[40,205.19,21.71,"B40:LOW40","n"],[41,264.93,21.71,"B41:DQ41","n"],[42,264.27,20.28,"B42:LOG42","n"],[43,267.7,20.42,"B43:IQR43","n"],[44,245.54,22.19,"B44:TVA44","n"],[45,283.16,20.28,"B45:AGE45","n"],[46,253.22,24.42,"B46:PEER46","n"],[47,260.84,20.12,"B47:COHORT47","n"],[48,263.42,24.81,"B48:PCT48","n"],[50,269.66,20.12,"B50:ALLCOL50","n"],[53,260.71,20.28,"B53:MEAN53","n"],[54,251.4,22.64,"B54:PAIR54","n"],[55,256.55,20.28,"B55:RF55","n"],[61,254.23,20.28,"B61:DBETA61","n"],[62,274.98,24.31,"B62:BETAASC62","n"],[65,265.72,20.28,"B65:A20","n"],[69,206.8,20.99,"B69:Q69","u"],[70,260.86,20.28,"B70:W70","u"],[71,259.8,20.12,"B71:P71","u"],[72,316.42,15.55,"B72:G72","u"],[73,253.99,20.12,"B73:U73","u"],[74,258.73,20.12,"B74:C74","u"],[75,256.07,20.12,"B75:H75","u"],[76,269.07,20.12,"B76:P76","u"],[77,247.52,20.28,"B77:P77","u"],[80,267.98,20.12,"B80:P80","u"],[81,235.58,20.4,"B81:P81","u"],[82,215.85,20.12,"B82:P82","u"],[83,266.5,20.28,"B83:P83","u"],[86,318.33,15.8,"B86:H86","u"],[87,245.17,26.42,"B87:P87","u"],[88,250.3,19.67,"B88:P88","u"],[89,295.4,20.32,"B89:U89","u"],[91,238.93,21.38,"B91:R91","u"],[91,263.98,20.12,"B91:S91","u"],[92,253.93,20.4,"B92:P92","u"],[93,239.99,22.49,"B93:R93","u"],[93,249.97,20.37,"B93:V93","u"],[94,267.42,20.28,"B94:P94","u"],[95,230.8,15.35,"B95:P95","u"],[96,305.19,18.88,"B96:P96","u"],[96,277.63,24.42,"B96:R961","u"],[96,265.65,24.21,"B96:R962","u"],[97,241.8,18.0,"B97:P97","u"],[99,257.52,25.51,"B99:P99","u"],[101,237.67,28.29,"B101:P101","u"],[103,252.23,20.12,"B103:P103","u"],[104,261.54,18.21,"B104:P104","u"],[105,260.69,20.28,"B105:P105","u"],[106,244.87,21.01,"B106:P106","u"],[106,277.2,21.71,"B106:R1061","u"],[106,254.6,24.24,"B106:R1062","u"],[107,298.85,20.28,"B107:C107","u"],[107,233.59,27.24,"B107:P107","u"],[109,251.24,20.16,"B109:P109","u"],[110,303.5,20.44,"B110:P110","u"],[110,316.89,15.55,"B110:R1101","u"],[110,301.34,19.52,"B110:R1102","u"],[111,254.88,20.28,"B111:P111","u"],[113,308.83,16.04,"B113:P113","u"],[113,299.26,15.55,"B113:R1131","u"],[113,280.18,15.55,"B113:R1132","u"],[114,225.95,18.21,"B114:P114","u"],[115,304.82,20.28,"B115:C115","u"],[115,258.3,20.12,"B115:P115","u"],[118,305.86,15.55,"B118:P118","u"],[121,255.53,20.12,"B121:P121","u"],[122,266.76,20.12,"B122:P122","u"],[124,298.85,20.28,"B124:P124","u"],[126,276.72,20.28,"B126:P126","u"],[127,260.43,20.28,"B127:P127","u"],[128,268.17,20.28,"B128:P128","u"],[129,267.14,24.42,"B129:P129","u"]];
+    const PARENT = 316.42, H = 330, YMAX = 340, YMIN = 140;
+    const isRisk = s.view === 'risk';
+    const yOf = (a) => (YMAX - a) / (YMAX - YMIN) * H;
+    const xOf = (seq, mdd) => isRisk ? (mdd - 14) / 22 * 100 : seq / 132 * 100;
+    const resText = { n: '有效负结果', u: '待核实', s: '未评分' };
+    const fmtD = (a) => { const d = a - PARENT; return (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(2) + ' pp'; };
+    const leave = () => this.setState({ hover: null });
+    const points = RAW.map(([seq, ann, mdd, id, res]) => {
+      const ok = mdd <= 20, hot = ok && ann >= PARENT, on = s.hover === id;
+      const size = hot || on ? 11 : 8;
+      const x = xOf(seq, mdd), y = yOf(ann);
+      return {
+        id,
+        aria: id + '，年化 ' + ann.toFixed(2) + '%，回撤 ' + mdd.toFixed(2) + '%，' + resText[res],
+        style: 'position: absolute; left: ' + x.toFixed(2) + '%; top: ' + y.toFixed(1) + 'px; width: ' + size + 'px; height: ' + size + 'px; margin: -' + size / 2 + 'px 0 0 -' + size / 2 + 'px; padding: 0; border-radius: 50%; cursor: pointer; background: ' + (ok ? '#496af2' : '#ffffff') + '; border: ' + (ok ? '2px solid #ffffff' : '1.5px solid #da6b6e') + '; box-shadow: ' + (ok ? '0 0 0 1px #496af2' : 'none') + (on ? '; outline: 2px solid #243957; outline-offset: 2px' : '') + '; z-index: ' + (on ? 5 : hot ? 3 : ok ? 2 : 1),
+        enter: () => this.setState({ hover: id }),
+        leave,
+        raw: { ann, mdd, res, x, y }
+      };
+    });
+    const hp = points.find((p) => p.id === s.hover);
+    const tip = hp ? {
+      show: true, id: hp.id, ann: hp.raw.ann.toFixed(2) + '%', delta: fmtD(hp.raw.ann), mdd: hp.raw.mdd.toFixed(2) + '%' + (hp.raw.mdd > 20 ? ' · 超限' : ''), res: resText[hp.raw.res],
+      style: 'position: absolute; z-index: 10; pointer-events: none; min-width: 150px; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ed; border-radius: 9px; box-shadow: 0 6px 18px rgba(30,40,60,0.10); font-size: 11px; color: #303030; display: flex; flex-direction: column; gap: 3px; top: ' + Math.min(hp.raw.y + 12, 210).toFixed(0) + 'px; ' + (hp.raw.x > 70 ? 'right: ' + (100 - hp.raw.x + 1.5).toFixed(2) + '%' : 'left: ' + (hp.raw.x + 1.5).toFixed(2) + '%')
+    } : { show: false };
+    const h86 = points.find((p) => p.id === 'B86:H86').raw;
+    const segOn = 'font-size: 12px; padding: 5px 11px; min-height: 28px; border: none; border-radius: 7px; background: #ffffff; color: #303030; box-shadow: 0 1px 2px rgba(0,0,0,0.06); cursor: pointer';
+    const segOff = 'font-size: 12px; padding: 5px 11px; min-height: 28px; border: none; border-radius: 7px; background: transparent; color: #66758f; cursor: pointer';
+
+    const LINES = [['old_ml', '旧 ML', '#20a782'], ['ml2', 'ML2', '#20a782'], ['ml3', 'ML3', '#20a782'], ['structure', '结构线', '#9aa5b8'], ['math', '数学线', '#20a782'], ['cautious', '谨慎线', '#e8a747'], ['market_classification', '市场分类', '#9aa5b8'], ['operator_factors', '因子线', '#9aa5b8'], ['high_gain', '高涨幅', '#9aa5b8'], ['zb', '炸板线', '#da6b6e']];
+    const lines = LINES.map(([id, name, dot]) => {
+      const on = s.line === id;
+      return { name, dot, on: on ? 'true' : 'false', pick: () => this.setState({ line: id }),
+        style: 'display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; min-height: 30px; border-radius: 7px; cursor: pointer; border: 1px solid ' + (on ? '#c9d6fb' : '#e3e7ed') + '; background: ' + (on ? '#edf3ff' : '#ffffff') + '; color: ' + (on ? '#2f55d4' : '#4a5568') };
+    });
+
+    const TABS = [['overview', '概览', ''], ['records', '研究记录', '127'], ['flow', '实验与节奏', ''], ['logic', '策略逻辑', '']];
+    const tabs = TABS.map(([id, name, count]) => {
+      const on = s.tab === id;
+      return { name, count, on: on ? 'true' : 'false', pick: () => this.setState({ tab: id, hover: null }),
+        style: 'display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 0 10px; margin-bottom: -1px; background: none; border: none; border-bottom: 2px solid ' + (on ? '#243957' : 'transparent') + '; color: ' + (on ? '#243957' : '#66758f') + '; font-weight: ' + (on ? '600' : '400') + '; cursor: pointer',
+        countStyle: count ? 'font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #f2f5fb; color: #5d6b84; font-weight: 400' : 'display: none' };
+    });
+
+    const BADGE = {
+      risk: ['回撤超限', '#fcefef', '#b0474b'],
+      prep: ['准备中', '#f2f5fb', '#5d6b84'],
+      ctrl: ['负对照', '#f2f5fb', '#5d6b84'],
+      dev: ['完成 · 待核', '#edf3ff', '#5876b3']
+    };
+    const REC = [
+      ['B129', '前日全天成交时间重心', 'risk', '13:00', 267.14, 24.42, 'P129', '关闭「固定全天成交时间重心」这一表达，按证据换下一个问题；不自动采用。'],
+      ['B128', '前 20 日收益与同日成交量相关', 'risk', '12:40', 268.17, 20.28, 'P128', '回撤超过 20% 上限；账户收据与独立核账未能完整交叉核验，保留原研究结果。'],
+      ['B127', '前日 20 收益率偏度', 'risk', '12:20', 260.43, 20.28, 'P127', '回撤超过 20% 上限；账户收据与独立核账未能完整交叉核验，保留原研究结果。'],
+      ['B126', '前日最大单分钟成交量占比', 'risk', '11:57', 276.72, 20.28, 'P126', '回撤超过 20% 上限；账户收据与独立核账未能完整交叉核验，保留原研究结果。'],
+      ['B125', '前 20 日收益序列持续性对照', 'prep', '11:15', null, null, '—', '计划已写，尚未跑完整账户。'],
+      ['B124', '单一零信息列对照', 'ctrl', '10:54', 298.85, 20.28, 'P124', '零信息列对照，用来判断新增列是否真的带来信息。'],
+      ['B123', '官方停牌历史与方法比较', 'prep', '10:15', null, null, '—', '计划已写，尚未跑完整账户。'],
+      ['B122', '前日个股成交量加权价格离散', 'risk', '09:51', 266.76, 20.12, 'P122', '回撤超过 20% 上限；账户收据与独立核账未能完整交叉核验，保留原研究结果。'],
+      ['B121', '全市场成交额加权日内收益', 'risk', '09:29', 255.53, 20.12, 'P121', '回撤超过 20% 上限；账户收据与独立核账未能完整交叉核验，保留原研究结果。'],
+      ['B120', '前日指数日高到收盘的回落', 'dev', '09:02', null, null, '—', '批次完成，账户指标尚未核实。']
+    ];
+    const mk = ([id, title, b, time, ann, mdd, acct, note]) => {
+      const bd = BADGE[b];
+      return {
+        id, title, time, acct, note, badge: bd[0],
+        badgeStyle: 'font-size: 10px; padding: 2px 7px; border-radius: 5px; white-space: nowrap; background: ' + bd[1] + '; color: ' + bd[2],
+        ann: ann == null ? '—' : ann.toFixed(2) + '%',
+        mdd: mdd == null ? '—' : mdd.toFixed(2) + '%',
+        mddColor: mdd != null && mdd > 20 ? '#b0474b' : '#243957',
+        delta: ann == null ? '—' : fmtD(ann),
+        deltaColor: ann == null ? '#9aa5b8' : '#b0474b'
+      };
+    };
+    const records = REC.map((r) => {
+      const o = mk(r), on = s.rec === r[0];
+      o.on = on ? 'true' : 'false';
+      o.pick = () => this.setState({ rec: r[0] });
+      o.rowStyle = 'width: 100%; display: grid; grid-template-columns: 56px minmax(0, 1fr) 84px 92px 56px; align-items: center; gap: 12px; padding: 0 20px; height: 46px; border: none; border-top: 1px solid #f4f4f4; text-align: left; cursor: pointer; font-size: 13px; color: #303030; background: ' + (on ? '#f3f6fd' : '#ffffff') + '; box-shadow: ' + (on ? 'inset 2px 0 0 #496af2' : 'none');
+      return o;
+    });
+    const sel = mk(REC.find((r) => r[0] === s.rec) || REC[0]);
+
+    const DAYS = [['10/12', 8], ['10/13', 33], ['10/14', 18], ['10/15', 43], ['10/16', 8]];
+    const days = DAYS.map(([label, n], i) => ({ label, n, h: Math.round(n / 43 * 150), color: i === 4 ? '#c9d6fb' : '#7d95f5' }));
+
+    const issues = [
+      { title: '方法总成本还没算全', detail: '最近一次方法比较缺 all-in 成本或节点耗时，算不出真实提效比例。' },
+      { title: '反馈 A/B 还在准备', detail: '试点尚未执行，还不能判断反馈是否改变选题、节约实验或提高收益。' },
+      { title: '2026 独立样本可能被看过', detail: '记录里意外看到截断的 2026 公司行动资料，暴露范围未知；后续独立样本要保留暴露记录。' }
+    ];
+
+    return {
+      lines, tabs, points, tip, records, sel, days, issues,
+      isOverview: s.tab === 'overview' ? 'true' : '',
+      isRecords: s.tab === 'records' ? 'true' : '',
+      isFlow: s.tab === 'flow' ? 'true' : '',
+      isLogic: s.tab === 'logic' ? 'true' : '',
+      goVerify: () => this.setState({ view: 'risk', hover: 'B86:H86' }),
+      goRecords: () => this.setState({ tab: 'records', rec: 'B129' }),
+      tagStyle: 'position: absolute; font-size: 10px; color: #243957; white-space: nowrap; pointer-events: none; top: ' + (h86.y - 22).toFixed(0) + 'px; left: ' + h86.x.toFixed(2) + '%; margin-left: -30px',
+      xticks: isRisk
+        ? [15, 20, 25, 30, 35].map((v) => ({ text: '回撤 ' + v + '%', style: 'position: absolute; top: 5px; left: ' + ((v - 14) / 22 * 100).toFixed(2) + '%; transform: translateX(-50%); white-space: nowrap' }))
+        : [1, 30, 60, 90, 129].map((v) => ({ text: 'B' + v, style: 'position: absolute; top: 5px; left: ' + (v / 132 * 100).toFixed(2) + '%; transform: translateX(-50%)' })),
+      isSeq: isRisk ? 'false' : 'true',
+      isRiskStr: isRisk ? 'true' : 'false',
+      isRisk: isRisk ? 'true' : '',
+      segSeq: isRisk ? segOff : segOn,
+      segRisk: isRisk ? segOn : segOff,
+      viewSeq: () => this.setState({ view: 'seq', hover: null }),
+      viewRisk: () => this.setState({ view: 'risk', hover: null }),
+      zoneStyle: 'position: absolute; left: 0; top: 0; width: ' + (isRisk ? '27.27%' : '100%') + '; height: 39px; background: rgba(32,167,130,0.07)',
+      zoneLabelStyle: 'position: absolute; top: 4px; ' + (isRisk ? 'left: 8px' : 'right: 8px') + '; font-size: 10px; color: #138565',
+      zoneLabel: isRisk ? '回撤合格且不低于父本' : '高于父本',
+      chartLabel: isRisk ? '112 个账户的年化收益与最大回撤散点图，虚线为父本 E11J 316.42% 和回撤上限 20%' : '112 个账户按批次排列的年化收益散点图，虚线为父本 E11J 316.42%'
+    };
+  }
+}
+</script>
+</body>
+</html>

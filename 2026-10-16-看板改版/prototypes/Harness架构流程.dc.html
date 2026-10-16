@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Harness 架构流程</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: 960px; height: 960px; overflow: hidden; background: #fafafa; color: #1f1f1f; font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 14px; line-height: 1.6">
+
+<div aria-hidden="true" style="position: absolute; left: 124px; top: 198px; width: 680px; height: 260px; background: #eef6f1; border-radius: 28px"></div>
+<div aria-hidden="true" style="position: absolute; left: 40px; top: 590px; width: 860px; height: 290px; box-sizing: border-box; background: #f6f3fb; border: 1px solid #e6def5; border-radius: 18px"></div>
+
+<svg width="8" height="107" viewBox="0 0 8 107" preserveAspectRatio="none" style="position: absolute; left: 120px; top: 182px; width: 8px; height: 107px; overflow: visible; fill: none; stroke: #8f8f8f; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-1" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#8f8f8f" stroke="none" style="stroke: none; fill: #8f8f8f; fill: context-stroke"/></marker></defs><path d="M 4 0 L 4 103" marker-end="url(#dc-arrow-head-filled-1)"></path></svg>
+<svg width="8" height="92" viewBox="0 0 8 92" preserveAspectRatio="none" style="position: absolute; left: 184px; top: 198px; width: 8px; height: 92px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 4 92 L 4 0"></path></svg>
+<svg width="71" height="8" viewBox="0 0 71 8" preserveAspectRatio="none" style="position: absolute; left: 188px; top: 194px; width: 71px; height: 8px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-2" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#3f8a64" stroke="none" style="stroke: none; fill: #3f8a64; fill: context-stroke"/></marker></defs><path d="M 0 4 L 67 4" marker-end="url(#dc-arrow-head-filled-2)"></path></svg>
+<svg width="75" height="8" viewBox="0 0 75 8" preserveAspectRatio="none" style="position: absolute; left: 452px; top: 194px; width: 75px; height: 8px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-3" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#3f8a64" stroke="none" style="stroke: none; fill: #3f8a64; fill: context-stroke"/></marker></defs><path d="M 0 4 L 71 4" marker-end="url(#dc-arrow-head-filled-3)"></path></svg>
+<svg width="84" height="8" viewBox="0 0 84 8" preserveAspectRatio="none" style="position: absolute; left: 720px; top: 194px; width: 84px; height: 8px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 0 4 L 84 4"></path></svg>
+<svg width="8" height="91" viewBox="0 0 8 91" preserveAspectRatio="none" style="position: absolute; left: 800px; top: 198px; width: 8px; height: 91px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-4" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#3f8a64" stroke="none" style="stroke: none; fill: #3f8a64; fill: context-stroke"/></marker></defs><path d="M 4 0 L 4 87" marker-end="url(#dc-arrow-head-filled-4)"></path></svg>
+<svg width="8" height="92" viewBox="0 0 8 92" preserveAspectRatio="none" style="position: absolute; left: 800px; top: 366px; width: 8px; height: 92px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 4 0 L 4 92"></path></svg>
+<svg width="83" height="8" viewBox="0 0 83 8" preserveAspectRatio="none" style="position: absolute; left: 721px; top: 454px; width: 83px; height: 8px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-5" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#3f8a64" stroke="none" style="stroke: none; fill: #3f8a64; fill: context-stroke"/></marker></defs><path d="M 83 4 L 4 4" marker-end="url(#dc-arrow-head-filled-5)"></path></svg>
+<svg width="75" height="8" viewBox="0 0 75 8" preserveAspectRatio="none" style="position: absolute; left: 453px; top: 441px; width: 75px; height: 8px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-6" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#3f8a64" stroke="none" style="stroke: none; fill: #3f8a64; fill: context-stroke"/></marker></defs><path d="M 75 4 L 4 4" marker-end="url(#dc-arrow-head-filled-6)"></path></svg>
+<svg width="73" height="8" viewBox="0 0 73 8" preserveAspectRatio="none" style="position: absolute; left: 187px; top: 454px; width: 73px; height: 8px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-7" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#3f8a64" stroke="none" style="stroke: none; fill: #3f8a64; fill: context-stroke"/></marker></defs><path d="M 73 4 L 4 4" marker-end="url(#dc-arrow-head-filled-7)"></path></svg>
+<svg width="8" height="55" viewBox="0 0 8 55" preserveAspectRatio="none" style="position: absolute; left: 120px; top: 367px; width: 8px; height: 55px; overflow: visible; fill: none; stroke: #3f8a64; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-8" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#3f8a64" stroke="none" style="stroke: none; fill: #3f8a64; fill: context-stroke"/></marker></defs><path d="M 4 55 L 4 4" marker-end="url(#dc-arrow-head-filled-8)"></path></svg>
+<svg width="8" height="151" viewBox="0 0 8 151" preserveAspectRatio="none" style="position: absolute; left: 120px; top: 494px; width: 8px; height: 151px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-9" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7b5fc4" stroke="none" style="stroke: none; fill: #7b5fc4; fill: context-stroke"/></marker></defs><path d="M 4 0 L 4 147" marker-end="url(#dc-arrow-head-filled-9)"></path></svg>
+<svg width="43" height="8" viewBox="0 0 43 8" preserveAspectRatio="none" style="position: absolute; left: 188px; top: 690px; width: 43px; height: 8px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-10" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7b5fc4" stroke="none" style="stroke: none; fill: #7b5fc4; fill: context-stroke"/></marker></defs><path d="M 0 4 L 39 4" marker-end="url(#dc-arrow-head-filled-10)"></path></svg>
+<svg width="43" height="8" viewBox="0 0 43 8" preserveAspectRatio="none" style="position: absolute; left: 360px; top: 690px; width: 43px; height: 8px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-11" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7b5fc4" stroke="none" style="stroke: none; fill: #7b5fc4; fill: context-stroke"/></marker></defs><path d="M 0 4 L 39 4" marker-end="url(#dc-arrow-head-filled-11)"></path></svg>
+<svg width="43" height="8" viewBox="0 0 43 8" preserveAspectRatio="none" style="position: absolute; left: 532px; top: 690px; width: 43px; height: 8px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-12" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7b5fc4" stroke="none" style="stroke: none; fill: #7b5fc4; fill: context-stroke"/></marker></defs><path d="M 0 4 L 39 4" marker-end="url(#dc-arrow-head-filled-12)"></path></svg>
+<svg width="43" height="8" viewBox="0 0 43 8" preserveAspectRatio="none" style="position: absolute; left: 704px; top: 690px; width: 43px; height: 8px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-13" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7b5fc4" stroke="none" style="stroke: none; fill: #7b5fc4; fill: context-stroke"/></marker></defs><path d="M 0 4 L 39 4" marker-end="url(#dc-arrow-head-filled-13)"></path></svg>
+<svg width="8" height="71" viewBox="0 0 8 71" preserveAspectRatio="none" style="position: absolute; left: 292px; top: 742px; width: 8px; height: 71px; overflow: visible; fill: none; stroke: #b7791f; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 5 5"><defs><marker id="dc-arrow-head-filled-14" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#b7791f" stroke="none" style="stroke: none; fill: #b7791f; fill: context-stroke"/></marker></defs><path d="M 4 0 L 4 67" marker-end="url(#dc-arrow-head-filled-14)"></path></svg>
+<svg width="8" height="71" viewBox="0 0 8 71" preserveAspectRatio="none" style="position: absolute; left: 464px; top: 742px; width: 8px; height: 71px; overflow: visible; fill: none; stroke: #b7791f; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 5 5"><defs><marker id="dc-arrow-head-filled-15" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#b7791f" stroke="none" style="stroke: none; fill: #b7791f; fill: context-stroke"/></marker></defs><path d="M 4 0 L 4 67" marker-end="url(#dc-arrow-head-filled-15)"></path></svg>
+<svg width="8" height="71" viewBox="0 0 8 71" preserveAspectRatio="none" style="position: absolute; left: 636px; top: 742px; width: 8px; height: 71px; overflow: visible; fill: none; stroke: #b7791f; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 5 5"><defs><marker id="dc-arrow-head-filled-16" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#b7791f" stroke="none" style="stroke: none; fill: #b7791f; fill: context-stroke"/></marker></defs><path d="M 4 0 L 4 67" marker-end="url(#dc-arrow-head-filled-16)"></path></svg>
+<svg width="8" height="71" viewBox="0 0 8 71" preserveAspectRatio="none" style="position: absolute; left: 808px; top: 742px; width: 8px; height: 71px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-17" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7b5fc4" stroke="none" style="stroke: none; fill: #7b5fc4; fill: context-stroke"/></marker></defs><path d="M 4 0 L 4 67" marker-end="url(#dc-arrow-head-filled-17)"></path></svg>
+<svg width="48" height="8" viewBox="0 0 48 8" preserveAspectRatio="none" style="position: absolute; left: 876px; top: 832px; width: 48px; height: 8px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 0 4 L 48 4"></path></svg>
+<svg width="8" height="286" viewBox="0 0 8 286" preserveAspectRatio="none" style="position: absolute; left: 920px; top: 550px; width: 8px; height: 286px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 4 0 L 4 286"></path></svg>
+<svg width="428" height="8" viewBox="0 0 428 8" preserveAspectRatio="none" style="position: absolute; left: 496px; top: 546px; width: 428px; height: 8px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 0 4 L 428 4"></path></svg>
+<svg width="8" height="79" viewBox="0 0 8 79" preserveAspectRatio="none" style="position: absolute; left: 492px; top: 471px; width: 8px; height: 79px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M 4 0 L 4 79"></path></svg>
+<svg width="43" height="8" viewBox="0 0 43 8" preserveAspectRatio="none" style="position: absolute; left: 453px; top: 467px; width: 43px; height: 8px; overflow: visible; fill: none; stroke: #7b5fc4; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-18" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#7b5fc4" stroke="none" style="stroke: none; fill: #7b5fc4; fill: context-stroke"/></marker></defs><path d="M 43 4 L 4 4" marker-end="url(#dc-arrow-head-filled-18)"></path></svg>
+
+<h2 style="position: absolute; left: 40px; top: 32px; margin: 0; font-size: 28px; line-height: 38px; font-weight: 650; letter-spacing: -0.02em">Agent 应该怎样持续迭代</h2>
+<button type="button" onClick="{{ toggleLayer }}" aria-pressed="{{ tg.pressed }}" style="position: absolute; left: 736px; top: 32px; width: 184px; height: 40px; box-sizing: border-box; padding: 0 12px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #ffffff; border: 1px solid #dcdcdc; border-radius: 10px; font: inherit; font-size: 13px; color: #1f1f1f; cursor: pointer"><span>显示各线位置</span><span style="position: relative; display: inline-block; width: 32px; height: 18px; border-radius: 9px; background: {{ tg.track }}"><span style="position: absolute; top: 2px; left: {{ tg.knob }}px; width: 14px; height: 14px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.25)"></span></span></button>
+<div style="position: absolute; left: 40px; top: 90px; width: 880px; display: flex; align-items: center; gap: 22px; font-size: 13px; line-height: 20px; color: #4f4f4f">
+<span style="display: inline-flex; align-items: center; gap: 8px"><svg aria-hidden="true" width="22" height="8" viewBox="0 0 22 8"><path d="M 1 4 L 21 4" fill="none" stroke="#3f8a64" stroke-width="2" stroke-linecap="round"></path></svg>研究循环 · 每轮都走</span>
+<span style="display: inline-flex; align-items: center; gap: 8px"><svg aria-hidden="true" width="22" height="8" viewBox="0 0 22 8"><path d="M 1 4 L 21 4" fill="none" stroke="#7b5fc4" stroke-width="2" stroke-linecap="round"></path></svg>Harness 改进 · 有方法缺口才走</span>
+<span style="display: inline-flex; align-items: center; gap: 8px"><svg aria-hidden="true" width="22" height="8" viewBox="0 0 22 8"><path d="M 1 4 L 21 4" fill="none" stroke="#b7791f" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 4"></path></svg>保留 / 回退</span>
+<span style="margin-left: auto; color: #6b6b6b">点节点看详情</span>
+</div>
+
+<button type="button" onClick="{{ p.nentry }}" title="Agent 先读本线权威状态、有效授权与剩余预算" style="position: absolute; left: 68px; top: 146px; width: 112px; height: 36px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: #ffffff; border: 1px solid #c9c9c9; border-radius: 18px; font: inherit; font-size: 13px; font-weight: 600; color: #262626; cursor: pointer; box-shadow: {{ s.nentry }}"><span>进入本轮</span></button>
+
+<button type="button" onClick="{{ p.n01 }}" title="核对权限、预算和当前版本" style="position: absolute; left: 60px; top: 290px; width: 192px; height: 76px; box-sizing: border-box; padding: 10px 14px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #d3e4d9; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.n01 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #2f7a55">01</span><span style="display: block; font-size: 15px; line-height: 22px; font-weight: 600">读取目标与本线状态</span></span></button>
+<button type="button" onClick="{{ p.n02 }}" title="竞争解释 → 最便宜的有效检验" style="position: absolute; left: 260px; top: 160px; width: 192px; height: 76px; box-sizing: border-box; padding: 10px 14px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #d3e4d9; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.n02 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #2f7a55">02</span><span style="display: block; font-size: 15px; line-height: 22px; font-weight: 600">研判瓶颈与选择问题</span></span></button>
+<button type="button" onClick="{{ p.n03 }}" title="先定对照、窗口、判据和成本" style="position: absolute; left: 528px; top: 160px; width: 192px; height: 76px; box-sizing: border-box; padding: 10px 14px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #d3e4d9; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.n03 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #2f7a55">03</span><span style="display: block; font-size: 15px; line-height: 22px; font-weight: 600">固定计划与冻结版本</span></span></button>
+<button type="button" onClick="{{ p.n04 }}" title="Agent 调工具 · 执行器产出原件" style="position: absolute; left: 708px; top: 290px; width: 192px; height: 76px; box-sizing: border-box; padding: 10px 14px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #d3e4d9; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.n04 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #2f7a55">04</span><span style="display: block; font-size: 15px; line-height: 22px; font-weight: 600">执行最小有效检验</span></span></button>
+<button type="button" onClick="{{ p.n05 }}" title="信息 / 工程 / 账户 / 独立确认" style="position: absolute; left: 528px; top: 420px; width: 192px; height: 76px; box-sizing: border-box; padding: 10px 14px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #d3e4d9; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.n05 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #2f7a55">05</span><span style="display: block; font-size: 15px; line-height: 22px; font-weight: 600">独立核验与分层裁决</span></span></button>
+<button type="button" onClick="{{ p.n06 }}" title="更新认识 · 保留 / 转向 / 收口" style="position: absolute; left: 260px; top: 420px; width: 192px; height: 76px; box-sizing: border-box; padding: 10px 14px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1.5px solid #3f8a64; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.n06 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #2f7a55">06</span><span style="display: block; font-size: 15px; line-height: 22px; font-weight: 600">反思并安排下一步</span></span></button>
+
+<button type="button" onClick="{{ p.ngate }}" title="单次策略失败不会触发改版；先分清策略 / 工程 / 方法问题" style="position: absolute; left: 62px; top: 422px; width: 124px; height: 72px; box-sizing: border-box; padding: 0; display: flex; align-items: center; justify-content: center; text-align: center; background: {{ gateBg }}; border: 0; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); font: inherit; font-size: 13px; font-weight: 600; color: #ffffff; cursor: pointer"><span>方法缺口？</span></button>
+
+<button type="button" onClick="{{ p.nH1 }}" title="在这里另存新版本 · 每项只改一个组件" style="position: absolute; left: 60px; top: 646px; width: 128px; height: 96px; box-sizing: border-box; padding: 10px 12px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #ddd2f1; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.nH1 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #6d4fb3">H1</span><span style="display: block; margin-top: 2px; font-size: 14px; line-height: 20px; font-weight: 600">Agent 修改候选 Harness</span></span></button>
+<button type="button" onClick="{{ p.nH2 }}" title="证据、改动边界、成功行为、预测" style="position: absolute; left: 232px; top: 646px; width: 128px; height: 96px; box-sizing: border-box; padding: 10px 12px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #ddd2f1; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.nH2 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #6d4fb3">H2</span><span style="display: block; margin-top: 2px; font-size: 14px; line-height: 20px; font-weight: 600">独立复核改动</span></span></button>
+<button type="button" onClick="{{ p.nH3 }}" title="同模型 / 同输入 / 同预算 / 固定判据" style="position: absolute; left: 404px; top: 646px; width: 128px; height: 96px; box-sizing: border-box; padding: 10px 12px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #ddd2f1; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.nH3 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #6d4fb3">H3</span><span style="display: block; margin-top: 2px; font-size: 14px; line-height: 20px; font-weight: 600">实际运行新旧任务比较</span></span></button>
+<button type="button" onClick="{{ p.nH4 }}" title="新问题 → 实际任务 → 新候选池" style="position: absolute; left: 576px; top: 646px; width: 128px; height: 96px; box-sizing: border-box; padding: 10px 12px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #ddd2f1; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.nH4 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #6d4fb3">H4</span><span style="display: block; margin-top: 2px; font-size: 14px; line-height: 20px; font-weight: 600">新边界绑定有界试点</span></span></button>
+<button type="button" onClick="{{ p.nH5 }}" title="执行结果、失败、成本 → 再判断" style="position: absolute; left: 748px; top: 646px; width: 128px; height: 96px; box-sizing: border-box; padding: 10px 12px; display: flex; align-items: center; text-align: left; background: #ffffff; border: 1px solid #ddd2f1; border-radius: 12px; font: inherit; color: #1f1f1f; cursor: pointer; box-shadow: {{ s.nH5 }}"><span style="display: block; min-width: 0"><span style="display: block; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #6d4fb3">H5</span><span style="display: block; margin-top: 2px; font-size: 14px; line-height: 20px; font-weight: 600">真实反馈进入下轮反思</span></span></button>
+
+<button type="button" onClick="{{ p.n06 }}" title="写回保留或回退的版本指向，再判断是否进入 H1" style="position: absolute; left: 232px; top: 814px; width: 644px; height: 44px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #ece6f8; border: 1px solid #d9cdf0; border-radius: 10px; font: inherit; font-size: 14px; font-weight: 600; color: #3d2d6b; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M 20 12 A 8 8 0 1 1 17.66 6.34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M 20 4 L 20 9 L 15 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>回到 06 反思</span></button>
+
+<button type="button" onClick="{{ p.nrules }}" style="position: absolute; left: 772px; top: 597px; width: 112px; height: 30px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; justify-content: center; gap: 6px; background: #ffffff; border: 1px solid #d4c8ee; border-radius: 15px; font: inherit; font-size: 12.5px; color: #4b3590; cursor: pointer; box-shadow: {{ s.nrules }}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16"><path d="M 8 1.5 L 13.5 3.5 L 13.5 8 C 13.5 11 11 13.5 8 14.5 C 5 13.5 2.5 11 2.5 8 L 2.5 3.5 Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path></svg><span>改版护栏</span></button>
+
+<div style="position: absolute; left: 314px; top: 306px; width: 300px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; pointer-events: none">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 22px; line-height: 30px; font-weight: 650; color: #1e4a34"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M 20 12 A 8 8 0 1 1 17.66 6.34" fill="none" stroke="#3f8a64" stroke-width="2" stroke-linecap="round"></path><path d="M 20 4 L 20 9 L 15 9" fill="none" stroke="#3f8a64" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>研究循环</div>
+<sc-if value="{{ layer }}" hint-placeholder-val="{{ false }}"><div style="padding: 4px 12px; background: #ffffff; border: 1px solid #d3e4d9; border-radius: 10px; font-size: 13px; line-height: 20px; color: #333333">{{ summary }}</div></sc-if>
+</div>
+
+<div style="position: absolute; left: 136px; top: 386px; width: 20px; font-size: 13px; line-height: 16px; font-weight: 700; color: #2f7a55">否</div>
+<div style="position: absolute; left: 136px; top: 506px; width: 20px; font-size: 13px; line-height: 16px; font-weight: 700; color: #5a3fa0">是</div>
+<div style="position: absolute; left: 160px; top: 602px; width: 200px; font-size: 15px; line-height: 20px; font-weight: 650; color: #4b3590">Harness 改进支路</div>
+<div style="position: absolute; left: 308px; top: 770px; width: 64px; font-size: 13px; line-height: 16px; color: #8a5208">保留父版</div>
+<div style="position: absolute; left: 480px; top: 770px; width: 64px; font-size: 13px; line-height: 16px; color: #8a5208">保留原版</div>
+<div style="position: absolute; left: 652px; top: 770px; width: 64px; font-size: 13px; line-height: 16px; color: #8a5208">回退父版</div>
+<div style="position: absolute; left: 824px; top: 770px; width: 64px; font-size: 13px; line-height: 16px; color: #5a3fa0">执行反馈</div>
+
+<sc-if value="{{ bd.n01.show }}" hint-placeholder-val="{{ false }}"><div style="position: absolute; right: 700px; top: 277px; height: 24px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 6px; background: #262626; color: #ffffff; border-radius: 12px; font-size: 12px; line-height: 16px; white-space: nowrap; pointer-events: none"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{ bd.n01.dot }}"></span><span>{{ bd.n01.text }}</span></div></sc-if>
+<sc-if value="{{ bd.n02.show }}" hint-placeholder-val="{{ false }}"><div style="position: absolute; right: 500px; top: 147px; height: 24px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 6px; background: #262626; color: #ffffff; border-radius: 12px; font-size: 12px; line-height: 16px; white-space: nowrap; pointer-events: none"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{ bd.n02.dot }}"></span><span>{{ bd.n02.text }}</span></div></sc-if>
+<sc-if value="{{ bd.n03.show }}" hint-placeholder-val="{{ false }}"><div style="position: absolute; right: 232px; top: 147px; height: 24px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 6px; background: #262626; color: #ffffff; border-radius: 12px; font-size: 12px; line-height: 16px; white-space: nowrap; pointer-events: none"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{ bd.n03.dot }}"></span><span>{{ bd.n03.text }}</span></div></sc-if>
+<sc-if value="{{ bd.n04.show }}" hint-placeholder-val="{{ false }}"><div style="position: absolute; right: 52px; top: 277px; height: 24px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 6px; background: #262626; color: #ffffff; border-radius: 12px; font-size: 12px; line-height: 16px; white-space: nowrap; pointer-events: none"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{ bd.n04.dot }}"></span><span>{{ bd.n04.text }}</span></div></sc-if>
+<sc-if value="{{ bd.n05.show }}" hint-placeholder-val="{{ false }}"><div style="position: absolute; right: 232px; top: 407px; height: 24px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 6px; background: #262626; color: #ffffff; border-radius: 12px; font-size: 12px; line-height: 16px; white-space: nowrap; pointer-events: none"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{ bd.n05.dot }}"></span><span>{{ bd.n05.text }}</span></div></sc-if>
+<sc-if value="{{ bd.n06.show }}" hint-placeholder-val="{{ false }}"><div style="position: absolute; right: 500px; top: 407px; height: 24px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 6px; background: #262626; color: #ffffff; border-radius: 12px; font-size: 12px; line-height: 16px; white-space: nowrap; pointer-events: none"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{ bd.n06.dot }}"></span><span>{{ bd.n06.text }}</span></div></sc-if>
+
+<div style="position: absolute; left: 40px; top: 904px; width: 880px; display: flex; flex-wrap: wrap; gap: 12px">
+<button type="button" onClick="{{ p.nrules }}" style="min-height: 36px; padding: 0 14px; display: flex; align-items: center; gap: 6px; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 10px; font: inherit; font-size: 13px; color: #333333; cursor: pointer"><span>什么时候改、能改什么、凭什么保留</span><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12"><path d="M 4 2 L 8 6 L 4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<button type="button" onClick="{{ p.nabout }}" style="min-height: 36px; padding: 0 14px; display: flex; align-items: center; gap: 6px; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 10px; font: inherit; font-size: 13px; color: #333333; cursor: pointer"><span>依据与说明</span><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12"><path d="M 4 2 L 8 6 L 4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</div>
+
+<sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+<aside aria-label="详情" style="position: absolute; left: {{ dr.left }}px; top: 130px; width: 360px; height: 750px; box-sizing: border-box; padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 16px; overflow: auto; background: #ffffff; border: 1px solid #e2e2e2; border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,0.14)">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="padding: 2px 8px; border-radius: 6px; font: 600 12px/18px ui-monospace, 'SF Mono', Menlo, monospace; color: #ffffff; background: {{ cur.color }}">{{ cur.num }}</span>
+<span style="font-size: 12px; line-height: 18px; color: #6b6b6b">{{ cur.kind }}</span>
+<button type="button" onClick="{{ close }}" aria-label="关闭详情" style="margin-left: auto; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; cursor: pointer; color: #4a4a4a"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14"><path d="M 3 3 L 11 11 M 11 3 L 3 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg></button>
+</div>
+<div>
+<h3 style="margin: 0; font-size: 19px; line-height: 27px; font-weight: 650">{{ cur.title }}</h3>
+<sc-if value="{{ cur.hasSub }}" hint-placeholder-val="{{ true }}"><p style="margin: 4px 0 0; font-size: 13px; line-height: 20px; color: #5c5c5c">{{ cur.sub }}</p></sc-if>
+</div>
+<sc-for list="{{ cur.sections }}" as="sec" hint-placeholder-count="3"><div>
+<div style="font-size: 12px; line-height: 18px; color: #6b6b6b">{{ sec.label }}</div>
+<p style="margin: 4px 0 0; font-size: 14px; line-height: 23px; color: #2a2a2a">{{ sec.text }}</p>
+</div></sc-for>
+<sc-if value="{{ cur.hasNext }}" hint-placeholder-val="{{ true }}"><div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{ cur.next }}" as="n" hint-placeholder-count="1"><button type="button" onClick="{{ n.pick }}" style="min-height: 36px; padding: 6px 12px; background: #f4f4f4; border: 1px solid #e2e2e2; border-radius: 18px; font: inherit; font-size: 12.5px; line-height: 18px; color: #262626; text-align: left; cursor: pointer">{{ n.label }}</button></sc-for>
+</div></sc-if>
+<sc-if value="{{ cur.showList }}" hint-placeholder-val="{{ false }}"><div style="display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid #eeeeee">
+<div style="font-size: 12px; line-height: 18px; color: #6b6b6b">停在这一步的研究线 · {{ cur.lineCount }} 条</div>
+<sc-for list="{{ cur.lines }}" as="ln" hint-placeholder-count="3"><div style="display: flex; gap: 8px; align-items: flex-start">
+<span style="flex: none; margin-top: 6px; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; {{ ln.dot }}"></span>
+<span style="flex: 1; min-width: 0; display: block"><span style="display: flex; gap: 8px; align-items: baseline; font-size: 13px; line-height: 20px"><b style="font-weight: 600">{{ ln.name }}</b><span style="font-size: 12px; color: {{ ln.stColor }}">{{ ln.status }}</span><span style="margin-left: auto; font-size: 12px; color: #6b6b6b; white-space: nowrap">{{ ln.time }}</span></span><span style="display: block; font-size: 12px; line-height: 18px; color: #6b6b6b; overflow: hidden; white-space: nowrap; text-overflow: ellipsis">{{ ln.task }}</span></span>
+</div></sc-for>
+<div style="font-size: 12px; line-height: 18px; color: #8a8a8a">阶段到节点的映射为示意，待接入确认</div>
+</div></sc-if>
+<sc-if value="{{ cur.showEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding-top: 14px; border-top: 1px solid #eeeeee; font-size: 12.5px; line-height: 20px; color: #6b6b6b">当前没有研究线停在这一步</div></sc-if>
+<sc-if value="{{ cur.showHint }}" hint-placeholder-val="{{ false }}"><div style="padding-top: 14px; border-top: 1px solid #eeeeee; font-size: 12.5px; line-height: 20px; color: #6b6b6b">打开右上角「显示各线位置」，可以看到停在这一步的研究线</div></sc-if>
+<div style="margin-top: auto; display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{ cur.links }}" as="lk" hint-placeholder-count="1"><a href="{{ lk.href }}" style="font-size: 13px; line-height: 20px; color: #4a4a4a">{{ lk.label }}</a></sc-for>
+</div>
+</aside>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"initialNode":{"editor":"enum","options":["none","entry","01","02","03","04","05","06","gate","H1","H2","H3","H4","H5","rules","about"],"default":"none","section":"演示状态"},"showLines":{"editor":"boolean","default":false,"section":"演示状态"},"$preview":{"width":960,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const G = '#2f7a55';
+    const V = '#6d4fb3';
+    const D = '#262626';
+    const propSel = this.props.initialNode && this.props.initialNode !== 'none' ? this.props.initialNode : null;
+    const sel = st.sel !== undefined ? st.sel : propSel;
+    const layer = st.layer !== undefined ? st.layer : !!this.props.showLines;
+    const RULE_LINK = [['查看对应规则与原件 →', '#rules']];
+
+    const N = {
+      entry: { num: '入口', kind: '进入本轮', title: '进入本轮', sub: '', c: D,
+        sec: [['先做什么', 'Agent 先读本线权威状态、有效授权与剩余预算；在途冻结件按原版完成。']],
+        next: [['01', '']] },
+      '01': { num: '01', kind: '研究循环', title: '读取目标与本线状态', sub: '核对权限、预算和当前版本', c: G,
+        sec: [
+          ['谁做什么', 'Agent 按 AGENTS 分线入口读取本线权威状态和原件，确认问题、证据层级、有效授权、剩余预算与冻结边界。按本次动作加载所需指引，复用未变的有效核验。'],
+          ['留下什么', '原 PLAN／SPEC 中的目标、阶段、输入引用与权限边界；不另建第二套当前状态。'],
+          ['然后怎么走', '授权范围内进入 02。真实阻塞只限制依赖该条件的动作，独立的已授权工作可继续。']],
+        next: [['02', '']] },
+      '02': { num: '02', kind: '研究循环', title: '研判瓶颈与选择问题', sub: '竞争解释 → 最便宜的有效检验', c: G,
+        sec: [
+          ['谁做什么', 'Agent 沿机会、信号、排序／仓位、成交、退出、费后账户定位瓶颈，检查反例与未知。提出能改变判断的问题，比较区分能力、影响、成本和依赖后选择。'],
+          ['留下什么', '候选池与原格式 SPEC：机制、父本、改动面、最小对照、预期动作、预算与停止条件。'],
+          ['然后怎么走', '先写清不同结果如何决定继续、转向、暂存或停止，再进入 03。']],
+        next: [['03', '']] },
+      '03': { num: '03', kind: '研究循环', title: '固定计划与冻结版本', sub: '先定对照、窗口、判据和成本', c: G,
+        sec: [
+          ['谁做什么', 'Agent 在看到结果前固定输入可知时点、直接父本、对照、窗口、费用／容量、评价阶段与拒绝条件；用本线入口冻结代码、配置、输入引用和版本。'],
+          ['留下什么', '绑定版本／哈希的 PLAN、SPEC 与冻结合同。真实依赖写入该合同；在途件保持原版。'],
+          ['然后怎么走', '核对具体提交所需资源与授权，进入 04。新规则留到下一合法未冻结边界。']],
+        next: [['04', '']] },
+      '04': { num: '04', kind: '研究循环', title: '执行最小有效检验', sub: 'Agent 调工具 · 执行器产出原件', c: G,
+        sec: [
+          ['谁做什么', 'Agent 按合同调用本线脚本或执行器完成检验，登记真实任务身份、结果和成本。只有要回答账户问题时才执行相应完整账户；信息或工程检验不强跑账户。'],
+          ['留下什么', '原执行回执、结果、日志与失败／未知；按需保留订单、成交、现金及持仓证据。'],
+          ['然后怎么走', '提交或脚本退出不等于研究成功。未知在途任务按原身份核实，不重复提交；完成后进入 05。']],
+        next: [['05', '']] },
+      '05': { num: '05', kind: '研究循环', title: '独立核验与分层裁决', sub: '信息 / 工程 / 账户 / 独立确认', c: G,
+        sec: [
+          ['谁做什么', '独立核验者或独立参照核对冻结判据、来源身份、买前时点、实现与原始结果。Agent 据证据区分正确性、开发改善、独立确认和采用；必要纠偏后定向复验。'],
+          ['留下什么', '有来源支持的裁决及未决项。工程故障、有效反证、证据不足分别保留。'],
+          ['然后怎么走', '更新原结果与状态后进入 06。开发正差不自动晋级；独立确认和采用沿原协议与权限。']],
+        next: [['06', '']] },
+      '06': { num: '06', kind: '研究循环 · 反思边界', title: '反思并安排下一步', sub: '更新认识 · 保留 / 转向 / 收口', c: G,
+        sec: [
+          ['谁做什么', 'Agent 对照原假设、实际动作、结果与成本，说明哪些解释受支持、被否定或仍未知，以及下一次选择因此如何改变。失败保留适用范围与重入所需的新证据。'],
+          ['留下什么', '原结果／反思中的判断变化、下一步和证据引用。阶段结束按本线流程关闭批次并接续。'],
+          ['然后怎么走', '常规研究回到 01。自然反思或允许的提前反思发现方法缺口时，另走 H1—H5；不要求每轮改 Harness。']],
+        next: [['gate', '反思后']] },
+      gate: { num: '判断', kind: '反思边界', title: '是否发现有证据支持的方法缺口？', sub: '', c: D,
+        sec: [
+          ['判断依据', '单次策略失败不自动触发改版。先分清是策略问题、工程故障，还是选题／生成／上下文方法的问题。'],
+          ['什么时候改', '批次结题后的自然反思边界；重要反证或连续低信息结果可提前反思。结构／旧 ML 调度默认每 3 个实质问题比较，放宽至 5 个须事前冻结；其他线按本线计划，不统一套用。'],
+          ['然后怎么走', '没有或证据不足：保留当前 Harness，沿研究循环回到 01。有可检验的方法缺口：进入 H1，做单组件改进与比较。']],
+        next: [['01', '否'], ['H1', '是']] },
+      H1: { num: 'H1', kind: 'Harness 改进支路', title: 'Agent 修改候选 Harness', sub: '在这里另存新版本 · 每项只改一个组件', c: V,
+        sec: [
+          ['谁做什么', '先冻结方法问题、证据、真实旧版、模型、预算和判据。Agent 读取反思任务，指出方法缺口、反例、竞争解释与应保留的成功行为；仅在 prompts、generation、context 中选择一个组件，另存候选版本和新哈希。'],
+          ['留下什么', '有证据绑定的提案和候选版本包，说明实际行为变化、预测、停止／回退条件。每轮最多两个候选；被拒版本也保留。'],
+          ['然后怎么走', '进入 H2。此时只是候选，不替换当前 Harness；评分器、交易表达、执行权限和在途冻结件不能借此改变。']],
+        next: [['H2', '']] },
+      H2: { num: 'H2', kind: 'Harness 改进支路', title: '独立复核改动', sub: '证据、改动边界、成功行为、预测', c: V,
+        sec: [
+          ['谁做什么', '独立复核者检查缺口是否有证据、改动是否单一且有界、成功行为是否保留、预测是否可验证。修改者不能给自己填写“独立通过”。'],
+          ['留下什么', '绑定提案、合同与原件的真实复核；拒绝项及其原因保留。'],
+          ['然后怎么走', '复核通过进入 H3；未通过保留父版，记录拒绝原因。']],
+        next: [['H3', '通过'], ['06', '未通过，保留父版']] },
+      H3: { num: 'H3', kind: 'Harness 改进支路', title: '实际运行新旧任务比较', sub: '同模型 / 同输入 / 同预算 / 固定判据', c: V,
+        sec: [
+          ['谁做什么', '旧版与候选分别组装 TASK，Agent 实际按各自指令生成候选池与 SPEC，绑定真实执行记录。独立按冻结的实质判据核验，计入生成、执行、核验、维护、沟通及轮次公共开销。'],
+          ['留下什么', '完整配对比较：原成功案例的每项判据不得退化，总成本不增加，且至少一项新增通过或成本下降；缺测成本保持未知。'],
+          ['然后怎么走', '失败、未知、无优势保留原版。开发比较有优势只获得 H4 的有界试点资格，不直接宣称研究效率提高。']],
+        next: [['H4', '有优势'], ['06', '失败 / 未知 / 无优势，保留原版']] },
+      H4: { num: 'H4', kind: 'Harness 改进支路', title: '新边界绑定有界试点', sub: '新问题 → 实际任务 → 新候选池', c: V,
+        sec: [
+          ['谁做什么', 'Agent 在下一合法未冻结边界使用新问题及新证据，按锁定候选生成真实新任务和新池，并交给本线实际消费者。结构／旧 ML 沿原 next → observe 执行，保留 policy／selector、预算与权限。'],
+          ['留下什么', '绑定 Harness 版本、任务、生成记录、原父版与执行证据的试点；不用评价旧池冒充新试点。'],
+          ['然后怎么走', '试点按原判据关闭。成功也只支持本次有界范围；失败或未知回退父版。普通研究不等待方法试点。']],
+        next: [['H5', '试点关闭'], ['06', '失败 / 未知，回退父版']] },
+      H5: { num: 'H5', kind: 'Harness 改进支路', title: '真实反馈进入下轮反思', sub: '执行结果、失败、成本 → 再判断', c: V,
+        sec: [
+          ['谁做什么', 'Agent 收取原执行回执，按原 review-pilot／export 关闭批次，将实际决策、结果、失败与完整成本绑定为下一轮 execution_feedback，回到新的反思任务。'],
+          ['留下什么', '保留或回退的版本指向、真实反馈与下一轮问题；没有新方法证据时继续用原版。'],
+          ['然后怎么走', '反馈回到 06，再判断是否进入 H1。局部生成或试点优势不能替代整体研究提效与独立经济确认。']],
+        next: [['06', '执行反馈']] },
+      rules: { num: '规则', kind: '改版护栏', title: '什么时候改、能改什么、凭什么保留', sub: '', c: V,
+        sec: [
+          ['什么时候改', '批次结题后的自然反思边界；重要反证或连续低信息结果可提前反思。结构／旧 ML 调度默认每 3 个实质问题比较，放宽至 5 个须事前冻结；其他线按本线计划，不统一套用。'],
+          ['Agent 在 H1 另存候选版本', '每项只改 prompts（反思／生成指令）、generation（生成问题与候选约束）、context（原件组织）之一；一轮最多 2 个候选。保留成功行为、失败和未知，写预测与停止条件。'],
+          ['不能借改版改变边界', '不改经济评分器、交易表达、执行授权或在途冻结件；不同时试新 policy／selector。修改检查器须单独验证，不能放宽判据自证成功。'],
+          ['比较之后再决定', '同模型、同原始输入、同预算、冻结阶段判据，独立核验并记录完整成本。开发优势只获得有界试点资格；局部试点不证明整体研究提效或独立经济收益。']],
+        next: [], links: [['Harness 改进原文 ↗', '#rules']] },
+      about: { num: '说明', kind: '关于这张图', title: '这张图说明项目期望的工作顺序', sub: '', c: D,
+        sec: [
+          ['怎么读', '各线是否已真实接入，要看右侧运行信号与“环节与规则”的原件。提示词／生成／上下文改版接口目前是结构／旧 ML 的可选入口，其他线需适配本线消费者；普通研究不等待方法试点。'],
+          ['依据', '总目标与持续迭代、研究调度提示词 §3 / §8、Harness反思与改进。图示更新：2026-10-16。']],
+        next: [], links: [['持续迭代规则 ↗', '#rules'], ['反思与研究能力 ↗', '#rules'], ['Harness 改进原文 ↗', '#rules']] }
+    };
+
+    const LINES = [
+      { name: '结构线', s: 'idle', status: '未见实时信号', task: 'H891', stage: '研究 / 选题', time: '3 小时前' },
+      { name: '旧 ML', s: 'done', status: '本轮已结束', task: 'RSI_BATCH122 · ML1HR_Q118', stage: '研究 / 选题', time: '3 小时前' },
+      { name: 'ML2', s: 'idle', status: '未见实时信号', task: 'BATCH26 / STEP10 · 工作卡待承接', stage: '来源 / 机制诊断', time: '1 天前' },
+      { name: 'ML3', s: 'idle', status: '未见实时信号', task: 'ML3-B129-PREVIOUS-MINUTE-VOLUME-TIME-CENTROID', stage: '研究 / 选题', time: '3 小时前' },
+      { name: '谨慎排序', s: 'done', status: '本轮已结束', task: '当前任务未明确登记', stage: '研究 / 选题', time: '未核实' },
+      { name: '数学服务', s: 'done', status: '本轮已结束', task: '当前任务未明确登记', stage: '研究 / 选题', time: '1 小时前' },
+      { name: '市场分类', s: 'open', status: '有待解决项', task: 'MCV004_POINTWISE_MA60_V1', stage: '来源 / 机制诊断', time: '2 天前' },
+      { name: '算子因子', s: 'idle', status: '未见实时信号', task: 'BR002 bounded preparation, not S5', stage: '裁决 / 反思', time: '2 天前' },
+      { name: '高涨幅', s: 'open', status: '有待解决项', task: 'cycle13_distinct_mechanism_admission', stage: '研究 / 选题', time: '未核实' },
+      { name: '炸板线', s: 'open', status: '有待解决项', task: 'Two base repairs remain locally verified', stage: '研究 / 选题', time: '未核实' },
+      { name: '研究总控', s: 'idle', status: '未见实时信号', task: 'WEAK-PERIOD-20261015-v1/Q22-CAUSAL-TARGET-B89-REJECT-Q23-CONTINUE', stage: '研究 / 选题', time: '19 小时前' }
+    ];
+    const STAGE = { '研究 / 选题': '02', '来源 / 机制诊断': '02', '裁决 / 反思': '06' };
+    const DOT = {
+      open: 'background: #d9822b; border: 1.5px solid #d9822b',
+      idle: 'background: #a3a3a3; border: 1.5px solid #a3a3a3',
+      done: 'background: #ffffff; border: 1.5px solid #8a8a8a'
+    };
+    const STC = { open: '#9a5a0c', idle: '#6b6b6b', done: '#6b6b6b' };
+
+    const at = {};
+    LINES.forEach((l) => {
+      const k = STAGE[l.stage];
+      if (!k) return;
+      if (!at[k]) at[k] = [];
+      at[k].push(l);
+    });
+
+    const pick = (id) => () => this.setState({ sel: id });
+    const label = (id) => (id === 'gate' ? '方法缺口判断' : N[id].num + ' ' + N[id].title);
+    const p = {};
+    const s = {};
+    Object.keys(N).forEach((id) => {
+      p['n' + id] = pick(id);
+      s['n' + id] = sel === id
+        ? '0 0 0 2px ' + N[id].c + ', 0 10px 24px rgba(0,0,0,0.10)'
+        : '0 1px 2px rgba(0,0,0,0.04)';
+    });
+
+    const ring = ['01', '02', '03', '04', '05', '06'];
+    const bd = {};
+    ring.forEach((id) => {
+      const ls = at[id] || [];
+      const openCount = ls.filter((l) => l.s === 'open').length;
+      bd['n' + id] = {
+        show: layer && ls.length > 0,
+        text: ls.length + ' 条线' + (openCount ? ' · ' + openCount + ' 待解决' : ''),
+        dot: openCount ? '#f0a04b' : '#bdbdbd'
+      };
+    });
+
+    const summary = LINES.length + ' 条线：' + Object.keys(at).sort().map((k) => k + ' 有 ' + at[k].length + ' 条').join(' · ');
+
+    const n = sel && N[sel] ? N[sel] : null;
+    const isRing = ring.indexOf(sel) >= 0;
+    const here = (sel && at[sel]) || [];
+    const cur = n ? {
+      num: n.num, kind: n.kind, title: n.title, color: n.c,
+      sub: n.sub || '', hasSub: !!n.sub,
+      sections: n.sec.map((x) => ({ label: x[0], text: x[1] })),
+      next: n.next.map((x) => ({ label: (x[1] ? x[1] + ' → ' : '→ ') + label(x[0]), pick: pick(x[0]) })),
+      hasNext: n.next.length > 0,
+      links: (n.links || RULE_LINK).map((x) => ({ label: x[0], href: x[1] })),
+      lines: here.map((l) => ({ name: l.name, status: l.status, task: l.task, time: l.time, dot: DOT[l.s], stColor: STC[l.s] })),
+      lineCount: here.length,
+      showList: layer && here.length > 0,
+      showEmpty: layer && here.length === 0 && isRing,
+      showHint: !layer && isRing
+    } : {
+      num: '', kind: '', title: '', color: D, sub: '', hasSub: false,
+      sections: [], next: [], hasNext: false, links: [], lines: [], lineCount: 0,
+      showList: false, showEmpty: false, showHint: false
+    };
+
+    const onLeftSide = ['03', '04', '05', 'H4', 'H5'].indexOf(sel) >= 0;
+
+    return {
+      p: p,
+      s: s,
+      bd: bd,
+      cur: cur,
+      open: !!n,
+      dr: { left: onLeftSide ? 40 : 560 },
+      layer: layer,
+      summary: summary,
+      gateBg: sel === 'gate' ? V : D,
+      tg: { pressed: layer ? 'true' : 'false', track: layer ? G : '#c9c9c9', knob: layer ? 16 : 2 },
+      toggleLayer: () => this.setState({ layer: !layer }),
+      close: () => this.setState({ sel: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

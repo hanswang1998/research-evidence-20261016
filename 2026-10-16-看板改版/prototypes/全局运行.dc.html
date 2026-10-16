@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>全局运行</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+a{color:#456eea;text-decoration:none}a:hover{color:#2f55d4}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 900px; background: #ffffff; color: #303030; font-family: Inter, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 14px; line-height: 1.5">
+
+<nav aria-label="工作区导航" style="flex: 1 1 176px; max-width: 176px; min-width: 176px; box-sizing: border-box; background: #f6f6f6; padding: 20px 12px 14px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 22px">
+<div style="width: 28px; height: 28px; border-radius: 7px; background: #262626; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px">R</div>
+<div style="display: flex; flex-direction: column; line-height: 1.3"><span style="font-weight: 600; font-size: 14px">RSI</span><span style="font-size: 10px; color: #8b8b8b">研究工作区</span></div>
+</div>
+<div style="font-size: 11px; color: #8b8b8b; padding: 0 10px 8px">工作台</div>
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 13.5h12M3 11l3.5-4 3 2.5L14 4"></path></svg>研究进展</a>
+<a href="Runtime.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; background: #e9e9e9; color: #303030; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 4.5V8l2.5 1.5"></path></svg>全局运行</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 13.5h12M4.5 11V7M8 11V4M11.5 11V8"></path></svg>策略回测</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"></rect><rect x="9" y="9" width="5" height="5" rx="1"></rect><path d="M4.5 7v4.5H9"></path></svg>RSI Harness</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="4.5" width="12" height="9" rx="1.5"></rect><path d="M5.5 4.5V3h5v1.5M2 8.5h12"></path></svg>工具管理</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3h3"></path></svg>近期动态</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #555; font-size: 13px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 5l3 3-3 3M8 11.5h5"></path></svg>研究指挥</a>
+</nav>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 24px; border-bottom: 1px solid #eaeaea">
+<div style="display: flex; align-items: center; gap: 14px; font-size: 13px"><span style="color: #8b8b8b">工作区</span><span style="color: #c4c4c4">/</span><span>全局运行</span></div>
+<div style="display: flex; align-items: center; gap: 8px">
+<div style="display: flex; flex-direction: column; align-items: flex-end; font-size: 10px; color: #777; line-height: 1.4; margin-right: 6px"><span style="display: flex; align-items: center; gap: 5px"><span style="width: 6px; height: 6px; border-radius: 3px; background: #20a782"></span>10 秒刷新</span><span>10/16 17:24</span></div>
+<button type="button" style="font-size: 12px; padding: 6px 10px; border: 1px solid #e3e3e3; border-radius: 7px; background: #fff; color: #444">刷新</button>
+<button type="button" style="font-size: 12px; padding: 6px 10px; border: 1px solid #e3e3e3; border-radius: 7px; background: #fff; color: #444">保存快照</button>
+<button type="button" style="font-size: 12px; padding: 6px 10px; border: 1px solid #e3e3e3; border-radius: 7px; background: #fff; color: #444">退出</button>
+</div>
+</header>
+
+<main style="box-sizing: border-box; width: 100%; max-width: 1264px; padding: 18px 24px 20px; display: flex; flex-direction: column; gap: 14px">
+
+<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 650; color: #243957">全局运行</h2>
+<span style="font-size: 11px; color: #6b7891">按执行证据判断 · 聊天活动不算实际推进</span>
+</div>
+
+<!-- 汇总 -->
+<section aria-label="运行汇总" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border: 1px solid #eaeaea; border-radius: 12px; padding: 14px 0">
+<sc-for list="{{stats}}" as="st" hint-placeholder-count="5">
+<button type="button" onClick="{{st.pick}}" aria-pressed="{{st.on}}" style="{{st.style}}">
+<span style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #66758f"><span style="width: 7px; height: 7px; border-radius: 4px; background: {{st.dot}}"></span>{{st.label}}</span>
+<span style="font-size: 25px; font-weight: 600; color: #243957; font-variant-numeric: tabular-nums; line-height: 1.3">{{st.n}}</span>
+</button>
+</sc-for>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch">
+
+<!-- 研究线列表 -->
+<section aria-label="研究线" style="flex: 999 1 540px; min-width: 0; border: 1px solid #eaeaea; border-radius: 12px; overflow: hidden">
+<div style="display: grid; grid-template-columns: 96px minmax(0, 1fr) 92px 84px; gap: 12px; padding: 10px 18px; font-size: 11px; color: #66758f; border-bottom: 1px solid #f0f0f0">
+<span>研究线</span><span>当前任务</span><span>状态</span><span style="text-align: right">最近实际推进</span>
+</div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+<div style="display: flex; align-items: center; gap: 8px; padding: 7px 18px; background: #fafbfc; border-top: 1px solid #f2f2f2; font-size: 11px; color: #5d6b84"><span style="width: 7px; height: 7px; border-radius: 4px; background: {{g.dot}}"></span>{{g.name}} · {{g.n}}</div>
+<sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3">
+<button type="button" onClick="{{r.pick}}" aria-current="{{r.on}}" style="{{r.style}}">
+<span style="font-weight: 550">{{r.name}}</span>
+<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #4a5568; font-size: 12px">{{r.task}}</span>
+<span><span style="{{r.badgeStyle}}">{{r.badge}}</span></span>
+<span style="text-align: right; font-size: 12px; color: {{r.ageColor}}">{{r.age}}</span>
+</button>
+</sc-for>
+</sc-for>
+</section>
+
+<!-- 详情 -->
+<section aria-label="研究线详情" style="flex: 1 1 340px; min-width: 0; border: 1px solid #eaeaea; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<div style="display: flex; align-items: center; gap: 8px"><h3 style="margin: 0; font-size: 16px; font-weight: 650; color: #243957">{{sel.name}}</h3><span style="{{sel.badgeStyle}}">{{sel.badge}}</span></div>
+<span style="font-size: 11px; color: #66758f">{{sel.stage}}</span>
+</div>
+<div style="font-size: 12px; color: #4a5568; font-variant-numeric: tabular-nums; word-break: break-all; padding: 8px 10px; background: #f7f8fa; border-radius: 7px">{{sel.taskFull}}</div>
+<sc-if value="{{sel.hasBlock}}" hint-placeholder-val="{{ true }}">
+<div style="padding: 10px 12px; border-radius: 8px; background: {{sel.blockBg}}; color: {{sel.blockColor}}; font-size: 13px">
+<div style="font-size: 11px; font-weight: 600; margin-bottom: 2px">{{sel.blockLabel}}</div>{{sel.block}}</div>
+</sc-if>
+<div><div style="font-size: 11px; color: #66758f; margin-bottom: 3px">正在做什么</div><div style="font-size: 13px">{{sel.doing}}</div></div>
+<div><div style="font-size: 11px; color: #66758f; margin-bottom: 3px">下一步</div><div style="font-size: 13px">{{sel.next}}</div></div>
+<div style="padding-top: 12px; border-top: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 6px; font-size: 12px">
+<div style="display: flex; justify-content: space-between; gap: 10px"><span style="color: #66758f">最近实际推进</span><span style="text-align: right">{{sel.progress}}</span></div>
+<div style="display: flex; justify-content: space-between; gap: 10px"><span style="color: #66758f">Agent 最后活动</span><span>{{sel.agent}}</span></div>
+</div>
+<div style="display: flex; gap: 16px; font-size: 12px; margin-top: auto"><a href="Main.dc.html">看研究进展 ›</a><a href="#">去研究指挥 ›</a><a href="#">查看依据 ↗</a></div>
+</section>
+
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: 'zb', filter: 'all' };
+  }
+  renderVals() {
+    const s = this.state;
+    const G = {
+      blocked: { name: '卡住，需要你处理', dot: '#da6b6e', badge: ['卡住', '#fcefef', '#b0474b'], blockLabel: '卡点', blockBg: '#fdf3f3', blockColor: '#8f3b3e' },
+      mismatch: { name: '记录不一致，待核对', dot: '#e8a747', badge: ['待核对', '#fff6e5', '#94681f'], blockLabel: '不一致', blockBg: '#fff9ee', blockColor: '#7a5418' },
+      moving: { name: '24 小时内有推进', dot: '#20a782', badge: ['推进中', '#eaf8f2', '#138565'], blockLabel: '', blockBg: '', blockColor: '' },
+      quiet: { name: '超过 24 小时没推进', dot: '#9aa5b8', badge: ['没动静', '#f2f5fb', '#5d6b84'], blockLabel: '', blockBg: '', blockColor: '' }
+    };
+    const L = [
+      { id: 'zb', g: 'blocked', name: '炸板线', stage: '研究 / 选题', task: '基座两处修复已本地验证 28/28', age: '无记录', agent: '10/14 14:10',
+        progress: '没有登记过实际推进',
+        block: '缺与股票、决策日绑定的原始公告发布时间和版本记录；换账号也补不齐。',
+        doing: '基座两处修复已完成；入场研究仍缺历史公告的发布时间与版本证据，本轮没有新增回测。',
+        next: '比较 FCF1 / NCS1 / FSC1 / HXC1 四项，仍没有既证明因果输入合格、又有执行余量的独立臂，未启动账户。' },
+      { id: 'high_gain', g: 'blocked', name: '高涨幅', stage: '研究 / 选题', task: 'cycle13_distinct_mechanism_admission', age: '无记录', agent: '10/14 14:02',
+        progress: '没有登记过实际推进',
+        block: '尚无获准的新实验，在等有新增证据的具体机制或合法来源。',
+        doing: '10/14 核实：E126 已完成，结论是「大涨更多但仍亏损」，表达已关闭；最新停点 E259，归因方向已关闭。',
+        next: '等有实质新增证据的机制或合法来源再准入；不重做 E258 / E259 归因方向。' },
+      { id: 'market', g: 'blocked', name: '市场分类', stage: '来源 / 机制诊断', task: 'MCV004_POINTWISE_MA60_V1', age: '2 天前', agent: '10/14 10:48',
+        progress: '10/14 10:25 · MCV004 分类与原请求路径已区分，账户未就绪',
+        block: '当前实验还不具备完整账户条件，经济结果未知。',
+        doing: '查清 3 次字段缺失都来自原始财报导出本身为空，入库后仍为空。',
+        next: 'MCV004 接续新模式的输入与接口准备，只在本地准备；账户仍由结构线执行。' },
+      { id: 'structure', g: 'mismatch', name: '结构线', stage: '研究 / 选题', task: 'H891', age: '4 小时前', agent: '10/16 13:29',
+        progress: '10/16 12:59 · H891 完整账户，有效负结果',
+        block: 'active_batch 与 scheduler_runtime 的批次引用不同，当前任务按 active_batch 取。',
+        doing: '核对新方向：新增停牌是否让卖出压力转向仍可交易的股票；差异成立才送入下一批。',
+        next: 'H891 已裁决为有效负结果，继续保留 H781；换不同机制，再做两次有效问题反思和真实 RSI 比较。' },
+      { id: 'ml2', g: 'mismatch', name: 'ML2', stage: '来源 / 机制诊断', task: 'BATCH26 / STEP10 · 工作卡待承接', age: '1 天前', agent: '—',
+        progress: '10/15 10:41 · BATCH26 STEP9 裁决',
+        block: 'STATE 还停在 STEP5，工作卡已经引用 STEP10；准备不等于完成。',
+        doing: '没有收到 Agent 活动。',
+        next: '比较 K5OFF / E26JT 冒烟结果，再跑 A2QD 冒烟和 A1F / A2QD / A2QDR 完整回测，按评估标准出 STEP5 裁决。' },
+      { id: 'ml3', g: 'moving', name: 'ML3', stage: '研究 / 选题', task: 'B129 前日全天成交时间重心', age: '4 小时前', agent: '10/16 13:29',
+        progress: '10/16 13:05 · 方法脚本完成',
+        block: '',
+        doing: '检验在既有风险减仓之外，让模型学销售收现比能否改善选股顺序；预算一次表达、最多五个年度模型、一个完整账户。',
+        next: 'B129 已封存；关闭全天成交时间重心这一表达，按证据换下一个问题，不自动采用。' },
+      { id: 'old_ml', g: 'moving', name: '旧 ML', stage: '研究 / 选题', task: 'RSI_BATCH122 · ML1HR_Q118', age: '5 小时前', agent: '10/16 13:19',
+        progress: '10/16 12:52 · RSI_BATCH121 通过固定上下文检验',
+        block: '',
+        doing: '核账保持全部 49 个案例，已生成的结果不用来筛选剩余案例。',
+        next: '49 个身份全部保留；每次干预前先确认克隆完全一致、没有共享可变对象。' },
+      { id: 'math', g: 'moving', name: '数学服务', stage: '研究 / 选题', task: 'MATH138 · 复用 Q118 结论', age: '2 小时前', agent: '10/16 17:01',
+        progress: '10/16 15:06 · MATH138 检查点，没有新的可支持问题',
+        block: '',
+        doing: 'Q118 终态还没落盘，各线证据没变；复用现有结论和再进入条件，不需要你操作。',
+        next: '下次接续先接收 ML1HR_Q118 / RSI_BATCH122 的终态或具体方法反馈。' },
+      { id: 'controller', g: 'moving', name: '研究总控', stage: '研究 / 选题', task: 'WEAK-PERIOD Q22 / Q23', age: '21 小时前', agent: '10/16 08:18',
+        progress: '10/15 20:47 · 总控研究裁决已登记',
+        block: '',
+        doing: '本轮验证改变了下一步：优先检查训练目标与真实下单动作是否一致。',
+        next: '研究选择从邻近特征 / 投票转向「预测目标与实际动作配对」；接续 Q23 固定年份样本。' },
+      { id: 'operator', g: 'quiet', name: '算子因子', stage: '裁决 / 反思', task: 'BR002 有界准备', age: '2 天前', agent: '10/14 14:02',
+        progress: '10/14 10:18 · O161 只获来源角色诊断认可',
+        block: '',
+        doing: '准备已收口；O161 只是行业共同时间变化加自身观测修正，不算独立信息源。',
+        next: '账户验证延后，交给总控协调结构线的合法边界。' },
+      { id: 'cautious', g: 'quiet', name: '谨慎排序', stage: '研究 / 选题', task: '当前任务未登记', age: '无记录', agent: '10/16 13:21',
+        progress: '没有登记过实际推进',
+        block: '',
+        doing: 'Cox 生存模型与已关闭的排序似然实验重合，没有放行；新方案计入实际持有时间。',
+        next: '从完整的 no-lucky 母本准备一个真正不同的原始来源机制，进账户前过两套独立计算和时间边界检查。' }
+    ];
+    const badgeStyle = (g) => 'font-size: 10px; padding: 2px 7px; border-radius: 5px; white-space: nowrap; background: ' + G[g].badge[1] + '; color: ' + G[g].badge[2];
+    const order = ['blocked', 'mismatch', 'moving', 'quiet'];
+    const groups = order.filter((g) => s.filter === 'all' || s.filter === g).map((g) => {
+      const rows = L.filter((l) => l.g === g).map((l) => {
+        const on = s.sel === l.id;
+        return {
+          name: l.name, task: l.task, age: l.age, badge: G[g].badge[0], badgeStyle: badgeStyle(g),
+          ageColor: l.age === '无记录' || l.age.indexOf('天') > 0 ? '#b0474b' : '#4a5568',
+          on: on ? 'true' : 'false',
+          pick: () => this.setState({ sel: l.id }),
+          style: 'width: 100%; display: grid; grid-template-columns: 96px minmax(0, 1fr) 92px 84px; align-items: center; gap: 12px; padding: 0 18px; height: 42px; border: none; border-top: 1px solid #f4f4f4; text-align: left; cursor: pointer; font-size: 13px; color: #303030; background: ' + (on ? '#f3f6fd' : '#ffffff') + '; box-shadow: ' + (on ? 'inset 2px 0 0 #496af2' : 'none')
+        };
+      });
+      return { name: G[g].name, dot: G[g].dot, n: rows.length, rows };
+    });
+    const l = L.find((x) => x.id === s.sel) || L[0];
+    const sel = {
+      name: l.name, stage: l.stage, taskFull: l.task, doing: l.doing, next: l.next, progress: l.progress, agent: l.agent,
+      badge: G[l.g].badge[0], badgeStyle: badgeStyle(l.g),
+      hasBlock: l.block ? 'true' : '', block: l.block, blockLabel: G[l.g].blockLabel, blockBg: G[l.g].blockBg, blockColor: G[l.g].blockColor
+    };
+    const STATS = [
+      ['all', '研究线', 11, '#243957'],
+      ['blocked', '卡住', 3, '#da6b6e'],
+      ['mismatch', '记录不一致', 2, '#e8a747'],
+      ['moving', '24 小时内有推进', 4, '#20a782'],
+      ['quiet', '超过 24 小时没推进', 2, '#9aa5b8']
+    ];
+    const stats = STATS.map(([id, label, n, dot], i) => {
+      const on = s.filter === id;
+      return { label, n, dot, on: on ? 'true' : 'false',
+        pick: () => this.setState({ filter: id }),
+        style: 'display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 20px; margin: 0 6px; border: none; border-radius: 8px; cursor: pointer; text-align: left; background: ' + (on ? '#f3f6fd' : 'transparent') };
+    });
+    return { stats, groups, sel };
+  }
+}
+</script>
+</body>
+</html>
