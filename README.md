@@ -1,6 +1,6 @@
 # 研究材料证据包 · 2026-10-16
 
-本私有仓库保存按 P0／P1／P2 十项需求整理的研究材料。完整材料以 Release 附件提供，下载 ZIP 和同名 `.sha256` 文件后解压；从包内 `README.md`、`ANSWERS.md` 和 `DATA_DICTIONARY.md` 开始审阅。
+本仓库保存按 P0／P1／P2 十项需求整理的研究材料。完整材料以 Release 附件提供，下载 ZIP 和同名 `.sha256` 文件后解压；从包内 `README.md`、`ANSWERS.md` 和 `DATA_DICTIONARY.md` 开始审阅。
 
 ## 下载文件
 
