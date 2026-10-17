@@ -135,7 +135,7 @@ index a6a9e93..9509092 100644
 +5. **每批先读本线状态摘要。** 用 [research_line_digest.py](../engine/research_line_digest.py) 生成；只在摘要指向的原件上补读，不重读全量历史。ML3 每批 33—48 分钟，64—76% 的工具调用在读文件，账户计算本身约 1.5 分钟；STATE.json 约 39 万字节，摘要约 1.5 万字符。
 +6. **结果统一分类。** 新记录在原状态字段之外写 `outcome`，取值为 [research_outcomes.py](../engine/research_outcomes.py) 的八类之一；原始描述保留。没有统一类别，就无法比较两个版本的命中率。
 diff --git "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md" "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
-index 762e9fd..c39ae88 100644
+index 506303d..417a23f 100644
 --- "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
 +++ "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
 @@ -1,5 +1,7 @@
@@ -157,7 +157,7 @@ index 762e9fd..c39ae88 100644
  
  后续并发接口须另行实现与验证，至少覆盖多在途身份、精确依赖、整机容量、逐项收取／失败隔离、按真实问题计数和反思边界；已有批次继续调用原冻结程序。接口未具备只限制跨候选并发执行，不阻塞候选准备或原有授权研究。运行记录实际证明并发后才称为已并行，计时证明改善后才称为提速。
  
-@@ -161,9 +165,9 @@ python -X utf8 -B engine/research_scheduler.py cycle --rrsi --branch <structure
+@@ -162,9 +166,9 @@ python -X utf8 -B engine/research_scheduler.py cycle --rrsi --branch <structure
  
  `CONTRACT.json.rrsi` 事前固定开发输入、父本、历史链、每候选改动上限和成本口径。2026-10-15 P1 的新引擎从首轮起每候选只改一个组件，最多两个候选，实际预算和反思频率不变；旧冻结引擎仍按原改动上限执行。可改组件为优先级与延伸深度；相同输入下已提出的候选不重复生成，未知与失败都保留。三个可比、完整且无改善的轮次触发已有名额内的未试组件探索；每第三个真实改进轮次优先比较尚未尝试的浅层延伸候选，反馈也可能让它更早出现，空间已尽保留原版。
  
@@ -169,7 +169,7 @@ index 762e9fd..c39ae88 100644
  
  首版成本是节点 `total_seconds`，并非全流程总成本。`engine_seconds` 包括本次比较的加载和准备，研究生成、维护与沟通等未完整测得时，`all_in_evolution_cost_seconds` 仍为空；不得据此宣布效率改善。
  
-@@ -357,3 +361,52 @@ v1 历史继续只用于身份链和排重；v2 可复用 P0 已明确的有效
+@@ -358,3 +362,53 @@ v1 历史继续只用于身份链和排重；v2 可复用 P0 已明确的有效
  新边界通过 `harness_deployment` 绑定已评审版本、实际任务和生成池，原 `frontier_pilot.initial_frontier` 必须指向该池；保持原 policy、selector、成本合同和执行流程，不与另一项调度试验叠加。D/O 自动记录版本来源，批内不可换池。`review-pilot` 结束保留回退指向，下一轮 `execution_feedback` 将实际决策／结果送回 REFLECTION_TASK；未接入的旧批次仍按原合同运行。
  
  这完成工程上的闭环，不自动证明 Agent 在真实研究中已使用新版、生成质量更好或费后收益改善；真实输入、完整成本、前瞻比较与经济确认按各自证据报告。新写入器的文件／字节计数与复用范围保留在 CONTRACT／REVIEW，不另建研究状态或定时任务。
@@ -187,7 +187,7 @@ index 762e9fd..c39ae88 100644
 +}
 +```
 +
-+`walkforward_contract` 由 `python -X utf8 -B engine/research_walkforward.py default-contract` 生成默认版后按本线修改并冻结；`start-batch` 同时把打分器复制为批次内的 `WALKFORWARD.py` 并登记哈希。冻结后，每个经济结果的 `observe` 输入须带 `"walkforward": {path, sha256}`，该裁决须写明候选与父本逐日权益文件，两份文件也须列在本结果的 `evidence` 中；`observe` 用冻结打分器从这两份文件重算，结论或胜出折数不一致即拒绝。`valid_improvement` 须同时满足账户评分改善和 `decision=pass`。候选与父本的交易日历必须完全一致，各窗口行数不得低于工作日数的 85%（`min_calendar_coverage`），否则拒绝计算或记 `insufficient_data`。
++`walkforward_contract` 由 `python -X utf8 -B engine/research_walkforward.py default-contract` 生成默认版后按本线修改并冻结；边界须同时以 `walkforward_runtime: {path, sha256}` 绑定打分器文件（通常是 `engine/research_walkforward.py`），`start-batch` 把它复制为批次内的 `WALKFORWARD.py`，之后每次读取批次都核对副本哈希。冻结后，每个经济结果的 `observe` 输入须带 `"walkforward": {path, sha256}`，该裁决须写明候选与父本逐日权益文件，两份文件也须列在本结果的 `evidence` 中；`observe` 用冻结打分器从这两份文件重算，结论或胜出折数不一致即拒绝。`valid_improvement` 须同时满足账户评分改善和 `decision=pass`。候选与父本的交易日历必须完全一致，各窗口行数不得低于工作日数的 85%（`min_calendar_coverage`），否则拒绝计算或记 `insufficient_data`。
 +
 +### 13.2 计时与成本回执
 +
@@ -217,11 +217,12 @@ index 762e9fd..c39ae88 100644
 +### 13.5 测试
 +
 +```powershell
-+python -X utf8 -B -m unittest discover -s tests -p "test_harness_v2.py" -v
++python -X utf8 -B -m unittest discover -s tests -p "test_harness_v2_*.py" -v
++python -X utf8 -B -m unittest discover -s tests -p "test_scheduler_integrity.py" -v
 +python -X utf8 -B -m unittest discover -s tests -p "test_research_*.py" -v
 +```
 +
-+第二条是原有测试；v2 改变了比较语义，原测试中断言“任一判据退化即拒绝”“成本未知即拒绝”“只有一个未决策”的用例需要按本节更新，其余应保持通过。
++第三条是原有测试。改变判定的规则默认关闭，原测试的判定语义不变；只有开启 v2 的用例才需要按本节更新。记录复算（第 6 节）对所有新批次生效：直接手改 `BATCH.json`、`D*.json`、`O*.json` 来构造场景的旧用例会被拒绝，应改为冻结新边界或重新 `observe`。
 diff --git "a/docs/\347\240\224\347\251\266\351\252\214\346\224\266\346\240\207\345\207\206.md" "b/docs/\347\240\224\347\251\266\351\252\214\346\224\266\346\240\207\345\207\206.md"
 index 075ac74..ccef4b2 100644
 --- "a/docs/\347\240\224\347\251\266\351\252\214\346\224\266\346\240\207\345\207\206.md"
@@ -615,7 +616,7 @@ index bac7083..e4dca93 100644
      ],
      "max_candidates": 8,
 diff --git a/engine/research_scheduler.py b/engine/research_scheduler.py
-index 59e999e..e830990 100644
+index 2033115..adea8e1 100644
 --- a/engine/research_scheduler.py
 +++ b/engine/research_scheduler.py
 @@ -5,6 +5,12 @@ The v1 choose() function drives action-only replay and legacy decision packets.
@@ -642,7 +643,7 @@ index 59e999e..e830990 100644
  
  
  def require(ok, message):
-@@ -790,7 +800,7 @@ def shadow_frontier(directory, context_path, output):
+@@ -797,7 +807,7 @@ def shadow_frontier(directory, context_path, output):
          return result
  
  
@@ -651,7 +652,7 @@ index 59e999e..e830990 100644
      validate_world(world, verify)
      validate_policy(policy)
      visible, blocked, trace = [], set(), []
-@@ -826,6 +836,18 @@ def replay(world, policy, verify=True):
+@@ -833,6 +843,18 @@ def replay(world, policy, verify=True):
      resolved = {o["question"] for o in observations if o["resolved"]}
      unknown = sum(n["total_seconds"] is None for n in visible)
      unsupported = sum(t["status"] == "unsupported" for t in trace)
@@ -670,7 +671,7 @@ index 59e999e..e830990 100644
      metrics = {"best_quality": max(qualities) if qualities else None,
                 "resolved_questions": len(resolved), "observed_nodes": len(visible),
                 "unsupported_actions": unsupported, "decision_calls": len(trace),
-@@ -834,6 +856,15 @@ def replay(world, policy, verify=True):
+@@ -841,6 +863,15 @@ def replay(world, policy, verify=True):
                 "missing_total_cost_nodes": unknown,
                 "total_seconds": None if unknown or unsupported else sum(n["total_seconds"] for n in visible),
                 "implementation_errors": sum(o["status"] == "implementation_error" for o in observations)}
@@ -686,7 +687,7 @@ index 59e999e..e830990 100644
      metrics["evaluation_stage"] = evaluation_stage(world)
      metrics["cost_scope"] = cost_identity(world)
      accounting = node_costs(world, visible, unsupported)
-@@ -878,7 +909,7 @@ def propose(policy, feedback):
+@@ -885,7 +916,7 @@ def propose(policy, feedback):
      return variants
  
  
@@ -695,7 +696,7 @@ index 59e999e..e830990 100644
      """Fixed request-count objective; unknown seconds never become zero-cost savings.
  
      Quality and resolved coverage must not decline. At least one conclusion is
-@@ -898,6 +929,152 @@ def dominates(candidate, incumbent):
+@@ -905,6 +936,152 @@ def dominates(candidate, incumbent):
      return strict
  
  
@@ -848,7 +849,7 @@ index 59e999e..e830990 100644
  def policy_changes(parent, candidate):
      return [key for key in sorted(POLICY_KEYS - {"id"}) if parent[key] != candidate[key]]
  
-@@ -1043,7 +1220,7 @@ def method_regressions(candidate, incumbent):
+@@ -1050,7 +1227,7 @@ def method_regressions(candidate, incumbent):
      return checks
  
  
@@ -857,7 +858,7 @@ index 59e999e..e830990 100644
      """Prediction accuracy is separate from admission; unknown costs never count as a saving."""
      prediction = proposal.get("prediction")
      if not prediction:
-@@ -1074,8 +1251,9 @@ def review_prediction(proposal, candidate, incumbent, comparison):
+@@ -1081,8 +1258,9 @@ def review_prediction(proposal, candidate, incumbent, comparison):
          a = new[world]
          am, bm = a["metrics"], b["metrics"]
          for metric, lower_is_better in (("best_quality", False), ("resolved_questions", False),
@@ -869,7 +870,7 @@ index 59e999e..e830990 100644
              if av is not None and bv is not None and (av > bv if lower_is_better else av < bv):
                  regressions.append(world + ":" + metric)
          checks = method_regressions(a, b)
-@@ -1155,10 +1333,30 @@ def rrsi_propose(policy, feedback, plan):
+@@ -1162,10 +1340,30 @@ def rrsi_propose(policy, feedback, plan):
      return variants
  
  
@@ -903,7 +904,7 @@ index 59e999e..e830990 100644
      for new, old in zip(candidate, incumbent):
          require(new["world"] == old["world"], "RRSI world mismatch")
          world_id, a, b = new["world"], new["metrics"], old["metrics"]
-@@ -1172,8 +1370,12 @@ def rrsi_compare(candidate, incumbent, floor=None):
+@@ -1179,8 +1377,12 @@ def rrsi_compare(candidate, incumbent, floor=None):
                  complete = False
              elif not check["passed"]:
                  reasons.append(world_id + ":required_regression:" + check["question"])
@@ -918,7 +919,7 @@ index 59e999e..e830990 100644
              complete = False
              continue
          if stage == "economic":
-@@ -1195,30 +1397,31 @@ def rrsi_compare(candidate, incumbent, floor=None):
+@@ -1202,30 +1404,31 @@ def rrsi_compare(candidate, incumbent, floor=None):
                  strict |= a["stage_passed_questions"] > b["stage_passed_questions"]
          if a["resolved_questions"] < max(1, b["resolved_questions"]):
              reasons.append(world_id + ":resolved_coverage")
@@ -962,7 +963,7 @@ index 59e999e..e830990 100644
      frontier = [i for i in eligible if not any(better(j, i) for j in eligible if i != j)]
      # Equivalent measurements use canonical policy content; incomparable tradeoffs keep the parent.
      def signature(index):
-@@ -1226,12 +1429,12 @@ def select_candidate(candidates, runs, comparisons, development, rrsi):
+@@ -1233,12 +1436,12 @@ def select_candidate(candidates, runs, comparisons, development, rrsi):
          for k in development:
              m = runs[index][k]["metrics"]
              if not rrsi:
@@ -979,7 +980,7 @@ index 59e999e..e830990 100644
          return values
      selected = None
      if frontier and all(signature(i) == signature(frontier[0]) for i in frontier):
-@@ -1250,9 +1453,11 @@ def select_candidate(candidates, runs, comparisons, development, rrsi):
+@@ -1257,9 +1460,11 @@ def select_candidate(candidates, runs, comparisons, development, rrsi):
      return selected, receipt
  
  
@@ -992,7 +993,7 @@ index 59e999e..e830990 100644
      worlds = [validate_world(read(p)) for p in world_paths]
      require(bool(worlds) and len({w["id"] for w in worlds}) == len(worlds), "worlds missing/duplicated")
      require(all(w["branch"] == branch for w in worlds), "cannot mix research branches")
-@@ -1278,6 +1483,9 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
+@@ -1285,6 +1490,9 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
                  "cost_unit": "recorded_generation_evaluation_requests_not_tokens_or_seconds",
                  "model_revision_cost_seconds": None, "new_experiments": 0,
                  "independent_validation": False}
@@ -1002,7 +1003,7 @@ index 59e999e..e830990 100644
      if rrsi:
          contract.update(rrsi=regularization,
                          selection="unique_pareto_or_equivalent_v1; each candidate against frozen incumbent; incomparable tradeoffs retain incumbent",
-@@ -1286,7 +1494,7 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
+@@ -1293,7 +1501,7 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
          if worlds[0].get(key):
              contract[key] = worlds[0][key]
      write(output / "CONTRACT.json", contract)
@@ -1011,7 +1012,7 @@ index 59e999e..e830990 100644
      write(output / "INCUMBENT.json", {"policy": policy, "replays": base})
      feedback = [base[i] for i in development]
      candidates = rrsi_propose(policy, feedback, regularization) if rrsi else propose(policy, feedback)
-@@ -1294,33 +1502,47 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
+@@ -1301,33 +1509,47 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
      results, candidate_runs, comparisons, prediction_checks = [], [], [], []
      for i, proposal in enumerate(candidates, 1):
          write(output / f"CANDIDATE_{i}.json", proposal)  # frozen before execution
@@ -1069,7 +1070,7 @@ index 59e999e..e830990 100644
      # Historical replay alone never changes a live batch. Only produce a pilot offer.
      eligible = winner != policy and clean and heldout_pass
      for ref in contract["worlds"]:
-@@ -1342,12 +1564,13 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
+@@ -1349,12 +1571,13 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
                "online_validation": False}
      if rrsi:
          observed_quality, admissible_quality = {}, {}
@@ -1085,7 +1086,7 @@ index 59e999e..e830990 100644
              observed_quality[worlds[j]["id"]] = max(known) if known else None
              admitted = ([base[j]["metrics"]] if base_admissible else []) + [
                  r["metrics"][j] for r in results if r["development_comparison"]["accepted"]]
-@@ -1381,6 +1604,11 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
+@@ -1388,6 +1611,11 @@ def cycle(world_paths, incumbent_path, output, branch, rrsi=False, history_path=
                            "all_in_method_cost_seconds": None,
                            "method_cost_by_world": {r["world"]: r["metrics"]["all_in_method_cost_seconds"] for r in winning_results},
                            "adaptation": "zero quality tolerance; no cost growth; novelty only proposes, never admits"}
@@ -1097,47 +1098,64 @@ index 59e999e..e830990 100644
          if regularization["previous_report"]:
              bound(regularization["previous_report"])
      write(output / "REPORT.json", report)
-@@ -1447,6 +1675,9 @@ def batch(directory):
-             bound(ref)
-     if obj.get("harness_deployment"):
-         check_harness_deployment(obj["harness_deployment"], obj)
-+    if obj.get("walkforward_contract"):
-+        bound(obj["walkforward_contract"])
+@@ -1446,20 +1674,25 @@ def batch(directory):
+     timestamp(obj["at"])
+     # Every field must still be what the bound report and boundary produce: a budget,
+     # policy or evaluator edited into BATCH.json is not a new boundary.
+-    changed = drift(obj, frozen_batch(bound(obj["cycle_report"]), bound(obj["boundary"])))
++    changed = drift(obj, frozen_batch(bound(obj["cycle_report"]), bound(obj["boundary"]), directory))
+     require(not changed, "BATCH.json disagrees with its bound cycle report and boundary: " + ", ".join(changed))
++    if obj.get("walkforward_runtime"):
 +        bound(obj["walkforward_runtime"])
      return obj
  
  
-@@ -1511,6 +1742,15 @@ def start_batch(report_path, boundary_path, output):
+ def start_batch(report_path, boundary_path, output):
+-    obj = frozen_batch(report_path, boundary_path)
++    obj = frozen_batch(report_path, boundary_path, output)
+     output = Path(output).resolve()
+     output.mkdir(parents=True, exist_ok=False)
++    if obj.get("walkforward_runtime"):
++        # Freeze the scorer with the contract so observe() can recompute every verdict.
++        (output / "WALKFORWARD.py").write_bytes(bound(read(boundary_path)["walkforward_runtime"]).read_bytes())
+     write(output / "BATCH.json", obj)
+     return obj
+ 
+ 
+-def frozen_batch(report_path, boundary_path):
++def frozen_batch(report_path, boundary_path, output):
+     """BATCH.json content implied by a cycle report and a frozen boundary. Writes nothing."""
+     report = read(report_path)
+     contract = read(bound(report["contract"]))
+@@ -1521,6 +1754,18 @@ def frozen_batch(report_path, boundary_path):
          require(report["decision"] == "retain_incumbent" and report["next_policy"] == report["incumbent"],
                  "keep the scheduler policy fixed during a harness trial")
          harness = check_harness_deployment(boundary["harness_deployment"], boundary)
 +    walkforward = boundary.get("walkforward_contract")
 +    if walkforward is not None:
 +        require(read(bound(walkforward)).get("schema") == "research_walkforward.v1", "invalid walk-forward contract")
++        # The scorer is bound in the boundary too, so a recomputed BATCH.json names the same bytes.
++        require(isinstance(boundary.get("walkforward_runtime"), dict), "bind walkforward_runtime in the boundary")
++        bound(boundary["walkforward_runtime"])
 +    branching = boundary.get("branching")
 +    if branching is not None:
 +        # Parallel siblings give replay more than one recorded child per decision point.
 +        require(isinstance(branching, dict) and set(branching) == {"siblings"} and
 +                type(branching["siblings"]) is int and 1 <= branching["siblings"] <= MAX_SIBLINGS,
 +                "branching needs 1..%d siblings" % MAX_SIBLINGS)
-     output = Path(output).resolve()
-     output.mkdir(parents=True, exist_ok=False)
      obj = {"schema": SCHEMA, "at": now(), "branch": report["branch"],
-@@ -1531,15 +1771,64 @@ def start_batch(report_path, boundary_path, output):
+            "cycle_report": reference(report_path), "boundary": reference(boundary_path),
+            "engine_sha256": contract["engine"]["sha256"], "policy": report["next_policy"],
+@@ -1539,14 +1784,59 @@ def frozen_batch(report_path, boundary_path):
          obj.update(mode="frontier_pilot", frontier_pilot=frontier_pilot)
      if harness:
          obj["harness_deployment"] = harness
 +    if branching is not None:
 +        obj["branching"] = branching
 +    if walkforward is not None:
-+        # Freeze the scorer with the contract so observe() can recompute every verdict.
-+        runtime = boundary.get("walkforward_runtime")
-+        source = bound(runtime) if runtime else Path(__file__).with_name("research_walkforward.py")
-+        require(source.exists(), "walk-forward runtime missing; bind walkforward_runtime in the boundary")
-+        (output / "WALKFORWARD.py").write_bytes(source.read_bytes())
 +        obj["walkforward_contract"] = walkforward
-+        obj["walkforward_runtime"] = reference(output / "WALKFORWARD.py")
-     write(output / "BATCH.json", obj)
++        obj["walkforward_runtime"] = {"path": str(Path(output).resolve() / "WALKFORWARD.py"),
++                                      "sha256": boundary["walkforward_runtime"]["sha256"]}
      return obj
  
  
@@ -1185,12 +1203,29 @@ index 59e999e..e830990 100644
      config = read(directory / "BATCH.json")
      decisions = sorted(directory.glob("D*.json"))
 -    nodes = []
-+    nodes, pending = [], []
++    nodes, pending, issued = [], [], {}
      for path in decisions:
          decision = read(path)
          require(bound(decision["batch"]) == (directory / "BATCH.json").resolve(), "wrong batch binding")
-@@ -1549,8 +1838,8 @@ def ledger(directory):
+@@ -1556,14 +1846,23 @@ def ledger(directory):
              bound(decision["selected"]["spec"])
+         # Records are recomputed from their bound inputs before they steer anything:
+         # an edited selection or outcome (even with re-hashed references) is rejected.
+-        require(all(timestamp(n["available_at"]) <= timestamp(decision["at"]) for n in nodes),
++        group = decision.get("sibling", {"group": decision["id"], "index": 1})
++        first = int(group["group"][1:])
++        visible = [n for n in nodes if int(n["id"][1:]) < first]
++        require(len(visible) == first - 1, path.name + " was issued while an earlier decision was pending")
++        require(all(timestamp(n["available_at"]) <= timestamp(decision["at"]) for n in visible),
+                 "decision predates a visible result")
+-        changed = drift(decision, decision_record(directory, config, nodes, bound(decision["context"])))
++        if group["group"] not in issued:
++            issued[group["group"]] = decision_records(directory, config, visible, bound(decision["context"]))
++        expected = issued[group["group"]]
++        if isinstance(expected, list):
++            expected = expected[group["index"] - 1] if group["index"] <= len(expected) else {}
++        changed = drift(decision, expected)
+         require(not changed, path.name + " disagrees with the state and context it was issued from: " + ", ".join(changed))
          outcome_path = directory / ("O" + path.name[1:])
          if not outcome_path.exists():
 -            node_costs(config, nodes)
@@ -1200,7 +1235,7 @@ index 59e999e..e830990 100644
          outcome = read(outcome_path)
          require(bound(outcome["decision"]) == path.resolve(), "decision binding mismatch")
          bound(outcome["input"])
-@@ -1571,7 +1860,7 @@ def ledger(directory):
+@@ -1587,7 +1886,7 @@ def ledger(directory):
              require(decision["question"] == outcome["observation"]["question"], "decision stage question mismatch")
              evaluate_stage(config["evaluation_contract"], outcome.get("stage_evidence"), outcome["observation"])
      node_costs(config, nodes)
@@ -1209,7 +1244,7 @@ index 59e999e..e830990 100644
  
  
  def has_override(nodes):
-@@ -1594,9 +1883,12 @@ def next_decision(directory, context_path):
+@@ -1610,17 +1909,25 @@ def next_decision(directory, context_path):
          config = batch(directory)
          if (directory / "EXPORT.json").exists() or (directory / "PILOT_REVIEW.json").exists():
              return {"status": "batch_closed", "action": "use the recorded next policy in a new boundary-frozen batch"}
@@ -1217,77 +1252,90 @@ index 59e999e..e830990 100644
 +        nodes, pending = ledger_all(directory)
          if pending:
 -            return {"status": "pending_result", "decision": pending["id"], "resubmit": False}
+-        obj = decision_record(directory, config, nodes, context_path)
+-        if "status" not in obj:
 +            waiting = {"status": "pending_result", "decision": pending[0]["id"], "resubmit": False}
 +            if len(pending) > 1:
 +                waiting["decisions"] = [d["id"] for d in pending]
 +            return waiting
-         if has_override(nodes):
-             return reflection_due(config, nodes, "override recorded; export diagnostic and re-evaluate")
-         completed = {n["observation"]["question"] for n in nodes if
-@@ -1616,46 +1908,89 @@ def next_decision(directory, context_path):
-             require(context.get("question") in stage_contract(config["evaluation_contract"])["questions"],
-                     "context needs a boundary-frozen stage question")
-         view = public_view(nodes, set(), len(nodes), config["policy"]["max_attempts"])
-+        width = sibling_width(config, nodes, view)
-         frontier_ref, comparison = None, None
-         if config["mode"] == "frontier_pilot":
-             frontier_ref = context.get("frontier", config["frontier_pilot"]["initial_frontier"])
-             if config.get("harness_deployment"):
-                 require(frontier_ref == config["frontier_pilot"]["initial_frontier"],
-                         "harness batch must use its frozen Agent-generated frontier")
--            selected, comparison = choose_frontier(read(bound(frontier_ref)), config, nodes)
-+            selections, comparison = choose_frontier_siblings(read(bound(frontier_ref)), config, nodes, width)
-         else:
-             require("frontier" not in context, "frontier requires a boundary-frozen frontier pilot")
-             selected = choose(view, config["policy"])
--        if selected is None:
-+            selections = [selected] * width if selected else []
-+        if not selections:
-             if comparison is not None:
-                 return {"status": "frontier_exhausted", "comparison": comparison,
-                         "action": "prepare independent hypotheses or close this bounded pilot; do not duplicate a decision"}
-             return reflection_due(config, nodes, "policy stopped or decision budget exhausted")
--        index = len(nodes) + 1
--        obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "id": f"D{index:04d}",
--               "batch": reference(directory / "BATCH.json"), "context": reference(context_path),
--               "policy_id": config["policy"]["id"], "view": view,
--               "visible_nodes": [n["id"] for n in nodes], "selected": selected,
--               "instruction": "Generate one authorized research action from this anchor; bind this receipt in its frozen protocol. Log any override; do not silently ignore it."}
--        if frontier_ref:
--            obj.update(frontier=frontier_ref, comparison=comparison,
--                       instruction="Execute only the selected candidate specification under existing authorization. Bind this decision and candidate hash. Preserve all other hypotheses; preparation is independent of pending execution.")
--        if config.get("evaluation_contract"):
--            obj["question"] = selected["question"] if frontier_ref else context["question"]
--        if config.get("harness_deployment"):
--            obj["harness"] = config["harness_deployment"]
--        write(directory / (obj["id"] + ".json"), obj)
++        records = decision_records(directory, config, nodes, context_path)
++        if isinstance(records, dict):
++            return records
++        for obj in records:
+             write(directory / (obj["id"] + ".json"), obj)
 -        return obj
-+        first = len(nodes) + 1
-+        written = []
-+        for offset, selected in enumerate(selections):
-+            index = first + offset
-+            obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "id": f"D{index:04d}",
-+                   "batch": reference(directory / "BATCH.json"), "context": reference(context_path),
-+                   "policy_id": config["policy"]["id"], "view": view,
-+                   "visible_nodes": [n["id"] for n in nodes], "selected": copy.deepcopy(selected),
-+                   "instruction": "Generate one authorized research action from this anchor; bind this receipt in its frozen protocol. Log any override; do not silently ignore it."}
-+            if frontier_ref:
-+                obj.update(frontier=frontier_ref, comparison=comparison,
-+                           instruction="Execute only the selected candidate specification under existing authorization. Bind this decision and candidate hash. Preserve all other hypotheses; preparation is independent of pending execution.")
-+            if len(selections) > 1:
-+                obj["sibling"] = {"group": f"D{first:04d}", "index": offset + 1, "size": len(selections)}
-+                obj["instruction"] += (f" This is sibling {offset + 1} of {len(selections)} from the same visible state: "
-+                                       "each sibling must test a different mechanism, not a parameter variant of another.")
-+            if config.get("evaluation_contract"):
-+                obj["question"] = selected["question"] if frontier_ref else context["question"]
-+            if config.get("harness_deployment"):
-+                obj["harness"] = config["harness_deployment"]
-+            write(directory / (obj["id"] + ".json"), obj)
-+            written.append(obj)
-+        if len(written) == 1:
-+            return written[0]
-+        return {"status": "sibling_decisions", "decisions": written,
++        if len(records) == 1:
++            return records[0]
++        return {"status": "sibling_decisions", "decisions": records,
 +                "action": "run every sibling under existing authorization; observe each result by its own decision id"}
+ 
+ 
+-def decision_record(directory, config, nodes, context_path):
+-    """The next decision (or stop status) implied by observed nodes and a context. Writes nothing."""
++def decision_records(directory, config, nodes, context_path):
++    """Decisions (or a stop status) implied by observed nodes and a context. Writes nothing."""
+     if has_override(nodes):
+         return reflection_due(config, nodes, "override recorded; export diagnostic and re-evaluate")
+     completed = {n["observation"]["question"] for n in nodes if
+@@ -1640,43 +1947,83 @@ def decision_record(directory, config, nodes, context_path):
+         require(context.get("question") in stage_contract(config["evaluation_contract"])["questions"],
+                 "context needs a boundary-frozen stage question")
+     view = public_view(nodes, set(), len(nodes), config["policy"]["max_attempts"])
++    width = sibling_width(config, nodes, view)
+     frontier_ref, comparison = None, None
+     if config["mode"] == "frontier_pilot":
+         frontier_ref = context.get("frontier", config["frontier_pilot"]["initial_frontier"])
+         if config.get("harness_deployment"):
+             require(frontier_ref == config["frontier_pilot"]["initial_frontier"],
+                     "harness batch must use its frozen Agent-generated frontier")
+-        selected, comparison = choose_frontier(read(bound(frontier_ref)), config, nodes)
++        selections, comparison = choose_frontier_siblings(read(bound(frontier_ref)), config, nodes, width)
+     else:
+         require("frontier" not in context, "frontier requires a boundary-frozen frontier pilot")
+         selected = choose(view, config["policy"])
+-    if selected is None:
++        selections = [selected] * width if selected else []
++    if not selections:
+         if comparison is not None:
+             return {"status": "frontier_exhausted", "comparison": comparison,
+                     "action": "prepare independent hypotheses or close this bounded pilot; do not duplicate a decision"}
+         return reflection_due(config, nodes, "policy stopped or decision budget exhausted")
+-    index = len(nodes) + 1
+-    obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "id": f"D{index:04d}",
+-           "batch": reference(directory / "BATCH.json"), "context": reference(context_path),
+-           "policy_id": config["policy"]["id"], "view": view,
+-           "visible_nodes": [n["id"] for n in nodes], "selected": selected,
+-           "instruction": "Generate one authorized research action from this anchor; bind this receipt in its frozen protocol. Log any override; do not silently ignore it."}
+-    if frontier_ref:
+-        obj.update(frontier=frontier_ref, comparison=comparison,
+-                   instruction="Execute only the selected candidate specification under existing authorization. Bind this decision and candidate hash. Preserve all other hypotheses; preparation is independent of pending execution.")
+-    if config.get("evaluation_contract"):
+-        obj["question"] = selected["question"] if frontier_ref else context["question"]
+-    if config.get("harness_deployment"):
+-        obj["harness"] = config["harness_deployment"]
+-    return obj
++    first = len(nodes) + 1
++    records = []
++    for offset, selected in enumerate(selections):
++        index = first + offset
++        obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "id": f"D{index:04d}",
++               "batch": reference(directory / "BATCH.json"), "context": reference(context_path),
++               "policy_id": config["policy"]["id"], "view": view,
++               "visible_nodes": [n["id"] for n in nodes], "selected": copy.deepcopy(selected),
++               "instruction": "Generate one authorized research action from this anchor; bind this receipt in its frozen protocol. Log any override; do not silently ignore it."}
++        if frontier_ref:
++            obj.update(frontier=frontier_ref, comparison=comparison,
++                       instruction="Execute only the selected candidate specification under existing authorization. Bind this decision and candidate hash. Preserve all other hypotheses; preparation is independent of pending execution.")
++        if len(selections) > 1:
++            obj["sibling"] = {"group": f"D{first:04d}", "index": offset + 1, "size": len(selections)}
++            obj["instruction"] += (f" This is sibling {offset + 1} of {len(selections)} from the same visible state: "
++                                   "each sibling must test a different mechanism, not a parameter variant of another.")
++        if config.get("evaluation_contract"):
++            obj["question"] = selected["question"] if frontier_ref else context["question"]
++        if config.get("harness_deployment"):
++            obj["harness"] = config["harness_deployment"]
++        records.append(obj)
++    return records
 +
 +
 +def sibling_width(config, nodes, view):
@@ -1326,62 +1374,63 @@ index 59e999e..e830990 100644
 -        require(pending is not None, "no pending decision")
 +        nodes, pendings = ledger_all(directory)
 +        require(bool(pendings), "no pending decision")
-         result = read(result_path)
--        require(result["branch"] == config["branch"] and result["decision_id"] == pending["id"], "result identity mismatch")
-+        pending = next((d for d in pendings if d["id"] == result.get("decision_id")), None)
-+        require(result["branch"] == config["branch"] and pending is not None, "result identity mismatch")
-+        index = int(pending["id"][1:])
-         require(type(result["decision_followed"]) is bool, "decision_followed required")
-         if not result["decision_followed"]:
-             require(bool(result.get("override_reason")), "override reason required")
-@@ -1667,15 +2002,21 @@ def observe(directory, result_path):
-         economic = observation["status"] in {"valid_improvement", "valid_negative"}
-         computed_quality = None
-         account_scorecard = None
-+        validated = walkforward_decision(config, result) if economic else None
-         if economic:
-             if quality_contract(config["quality_contract"])["schema"] == "research_quality.v2":
-                 account_scorecard = review_account(config["quality_contract"], result["grade_evidence"])
-                 computed_quality = account_scorecard["quality"]
--                expected = ("valid_improvement" if account_scorecard["decision"] in
--                            {"return_improved", "risk_repair_tradeoff"} else "valid_negative")
--                require(observation["status"] == expected, "outcome status disagrees with account scorecard")
-+                improved = account_scorecard["decision"] in {"return_improved", "risk_repair_tradeoff"}
-+                # With a frozen walk-forward contract, a development-window gain alone is not an improvement.
-+                if validated is not None:
-+                    improved = improved and validated == "pass"
-+                expected = "valid_improvement" if improved else "valid_negative"
-+                require(observation["status"] == expected, "outcome status disagrees with account scorecard / walk-forward")
-             else:
-                 computed_quality = grade(config["quality_contract"], result["grade_evidence"])
-+                require(observation["status"] != "valid_improvement" or validated in {None, "pass"},
-+                        "valid_improvement requires a walk-forward pass in this batch")
-         require(observation["quality"] is None or observation["quality"] == computed_quality,
-                 "manual quality disagrees with frozen evaluator")
-         observation["quality"] = computed_quality
-@@ -1692,10 +2033,9 @@ def observe(directory, result_path):
-         for ref in result["evidence"]:
-             bound(ref)
-         require(not result.get("cost_receipt") or config.get("cost_contract"), "cost receipt requires a frozen contract")
--        cost_node = {"id": f"n{len(nodes) + 1:04d}", "cost_receipt": result.get("cost_receipt"),
-+        cost_node = {"id": f"n{index:04d}", "cost_receipt": result.get("cost_receipt"),
-                      "evidence": [reference(directory / (pending["id"] + ".json"))]}
++        pending = next((d for d in pendings if d["id"] == read(result_path).get("decision_id")), None)
++        require(pending is not None, "result identity mismatch")
+         obj = outcome_record(directory, config, pending, result_path)
+         cost_node = {"id": obj["node"], "cost_receipt": obj.get("cost_receipt"), "evidence": [obj["decision"]]}
          node_costs(config, nodes + [cost_node])
--        index = len(nodes) + 1
-         obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "node": f"n{index:04d}",
-                "decision": reference(directory / (pending["id"] + ".json")),
-                "input": reference(result_path), "observation": observation,
-@@ -1705,6 +2045,9 @@ def observe(directory, result_path):
-                "evidence": result["evidence"]}
-         if account_scorecard is not None:
-             obj["account_scorecard"] = account_scorecard
-+        if result.get("walkforward"):
-+            obj["walkforward"] = result["walkforward"]
-+            obj["walkforward_decision"] = validated
-         if stage_review is not None:
-             obj.update(stage_review=stage_review, stage_evidence=result["stage_evidence"])
-         if result.get("cost_receipt"):
-@@ -1857,6 +2200,8 @@ def main(argv=None):
+@@ -1688,6 +2035,7 @@ def outcome_record(directory, config, pending, result_path):
+     """The O record implied by a pending decision and its result file. Writes nothing."""
+     result = read(result_path)
+     require(result["branch"] == config["branch"] and result["decision_id"] == pending["id"], "result identity mismatch")
++    index = int(pending["id"][1:])
+     require(type(result["decision_followed"]) is bool, "decision_followed required")
+     if not result["decision_followed"]:
+         require(bool(result.get("override_reason")), "override reason required")
+@@ -1699,15 +2047,21 @@ def outcome_record(directory, config, pending, result_path):
+     economic = observation["status"] in {"valid_improvement", "valid_negative"}
+     computed_quality = None
+     account_scorecard = None
++    validated = walkforward_decision(config, result) if economic else None
+     if economic:
+         if quality_contract(config["quality_contract"])["schema"] == "research_quality.v2":
+             account_scorecard = review_account(config["quality_contract"], result["grade_evidence"])
+             computed_quality = account_scorecard["quality"]
+-            expected = ("valid_improvement" if account_scorecard["decision"] in
+-                        {"return_improved", "risk_repair_tradeoff"} else "valid_negative")
+-            require(observation["status"] == expected, "outcome status disagrees with account scorecard")
++            improved = account_scorecard["decision"] in {"return_improved", "risk_repair_tradeoff"}
++            # With a frozen walk-forward contract, a development-window gain alone is not an improvement.
++            if validated is not None:
++                improved = improved and validated == "pass"
++            expected = "valid_improvement" if improved else "valid_negative"
++            require(observation["status"] == expected, "outcome status disagrees with account scorecard / walk-forward")
+         else:
+             computed_quality = grade(config["quality_contract"], result["grade_evidence"])
++            require(observation["status"] != "valid_improvement" or validated in {None, "pass"},
++                    "valid_improvement requires a walk-forward pass in this batch")
+     require(observation["quality"] is None or observation["quality"] == computed_quality,
+             "manual quality disagrees with frozen evaluator")
+     observation["quality"] = computed_quality
+@@ -1724,7 +2078,6 @@ def outcome_record(directory, config, pending, result_path):
+     for ref in result["evidence"]:
+         bound(ref)
+     require(not result.get("cost_receipt") or config.get("cost_contract"), "cost receipt requires a frozen contract")
+-    index = int(pending["id"][1:])
+     obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "node": f"n{index:04d}",
+            "decision": reference(directory / (pending["id"] + ".json")),
+            "input": reference(result_path), "observation": observation,
+@@ -1734,6 +2087,9 @@ def outcome_record(directory, config, pending, result_path):
+            "evidence": result["evidence"]}
+     if account_scorecard is not None:
+         obj["account_scorecard"] = account_scorecard
++    if result.get("walkforward"):
++        obj["walkforward"] = result["walkforward"]
++        obj["walkforward_decision"] = validated
+     if stage_review is not None:
+         obj.update(stage_review=stage_review, stage_evidence=result["stage_evidence"])
+     if result.get("cost_receipt"):
+@@ -1885,6 +2241,8 @@ def main(argv=None):
      p.add_argument("--out", required=True)
      p.add_argument("--rrsi", action="store_true", help="bounded RRSI-inspired proposal and cost selection")
      p.add_argument("--rrsi-history", help="previous RRSI REPORT.json; retain its immutable history chain")
@@ -1390,7 +1439,7 @@ index 59e999e..e830990 100644
      p = commands.add_parser("review-pilot")
      p.add_argument("--batch", required=True)
      p = commands.add_parser("shadow-frontier", help="compare frozen selectors without dispatching research")
-@@ -1894,7 +2239,8 @@ def main(argv=None):
+@@ -1922,7 +2280,8 @@ def main(argv=None):
          elif args.command == "check-frontier":
              result = validate_frontier(read(args.frontier), args.branch)
          elif args.command == "cycle":
@@ -1402,10 +1451,10 @@ index 59e999e..e830990 100644
              result = start_batch(args.report, args.boundary, args.out)
 diff --git a/tests/test_harness_v2_semantics.py b/tests/test_harness_v2_semantics.py
 new file mode 100644
-index 0000000..ba06f57
+index 0000000..20790ba
 --- /dev/null
 +++ b/tests/test_harness_v2_semantics.py
-@@ -0,0 +1,447 @@
+@@ -0,0 +1,489 @@
 +"""Tests for the opt-in v2 decision semantics and their v1 defaults.
 +
 +Scheduler v2 is enabled by `cycle --replay-semantics v2`, boundary `branching` and
@@ -1604,6 +1653,29 @@ index 0000000..ba06f57
 +        # Replay reaches the second recorded sibling instead of stopping at one path.
 +        replayed = s.replay(world, {**s.initial_policy(), "max_attempts": 4})
 +        self.assertEqual(replayed["metrics"]["observed_nodes"], 2)
++        # The sibling width is part of the frozen boundary, not an editable batch field.
++        width_edit = json.loads((directory / "BATCH.json").read_text(encoding="utf-8"))
++        width_edit["branching"]["siblings"] = 3
++        (directory / "BATCH.json").write_text(json.dumps(width_edit, indent=2) + "\n", encoding="utf-8")
++        with self.assertRaisesRegex(ValueError, "BATCH.json disagrees.*branching"):
++            s.batch(directory)
++
++    def test_edited_or_extra_sibling_decision_is_rejected(self):
++        directory, context = self.make_batch(siblings=2)
++        s.next_decision(directory, context["path"])
++        sibling = directory / "D0002.json"
++        honest = sibling.read_text(encoding="utf-8")
++        edited = json.loads(honest)
++        edited["sibling"]["index"] = 1
++        sibling.write_text(json.dumps(edited, indent=2) + "\n", encoding="utf-8")
++        with self.assertRaisesRegex(ValueError, "D0002.json disagrees"):
++            s.next_decision(directory, context["path"])
++        sibling.write_text(honest, encoding="utf-8")
++        extra = json.loads(honest)
++        extra.update(id="D0003", sibling={**extra["sibling"], "index": 3})
++        s.write(directory / "D0003.json", extra)
++        with self.assertRaisesRegex(ValueError, "D0003.json disagrees"):
++            s.observe(directory, self.result("D0001", "qa")["path"])
 +
 +    def test_single_decision_flow_is_unchanged(self):
 +        directory, context = self.make_batch(siblings=1)
@@ -1669,11 +1741,14 @@ index 0000000..ba06f57
 +        s.cycle([str(world_path)], None, self.root / "cycle", "structure")
 +        goal, quality = self.quality()
 +        contract = self.save("walkforward", walk.DEFAULT_CONTRACT)
-+        boundary = self.save("boundary", {"branch": "structure", "status": "first_scheduler_batch",
-+                                          "affects_running_experiments": False, "evidence": [goal],
-+                                          "quality_contract": quality, "walkforward_contract": contract})
++        boundary = {"branch": "structure", "status": "first_scheduler_batch",
++                    "affects_running_experiments": False, "evidence": [goal],
++                    "quality_contract": quality, "walkforward_contract": contract}
++        with self.assertRaisesRegex(ValueError, "bind walkforward_runtime"):
++            s.start_batch(self.root / "cycle" / "REPORT.json", self.save("unbound", boundary)["path"], self.root / "x")
++        boundary["walkforward_runtime"] = s.reference(ENGINE / "research_walkforward.py")
 +        directory = self.root / "batch"
-+        s.start_batch(self.root / "cycle" / "REPORT.json", boundary["path"], directory)
++        s.start_batch(self.root / "cycle" / "REPORT.json", self.save("boundary", boundary)["path"], directory)
 +        context = self.save("context", {"branch": "structure", "context_complete": True, "evidence": [goal]})
 +        s.next_decision(directory, context["path"])
 +        return directory, goal
@@ -1697,6 +1772,22 @@ index 0000000..ba06f57
 +            s.observe(directory, self.economic_result("valid_improvement", ref, [goal, worse, parent])["path"])
 +        observed = s.observe(directory, self.economic_result("valid_negative", ref, [goal, worse, parent])["path"])
 +        self.assertEqual(observed["walkforward_decision"], "fail")
++        # The stored verdict is recomputed on every read, not trusted from the O record.
++        record = directory / "O0001.json"
++        stored = json.loads(record.read_text(encoding="utf-8"))
++        stored["walkforward_decision"] = "pass"
++        stored["observation"]["status"] = "valid_improvement"
++        record.write_text(json.dumps(stored, indent=2) + "\n", encoding="utf-8")
++        with self.assertRaisesRegex(ValueError, "O0001.json disagrees.*walkforward_decision"):
++            s.ledger_all(directory)
++        # So is the frozen scorer copy.
++        record.write_text(json.dumps({**stored, "walkforward_decision": "fail",
++                                      "observation": observed["observation"]}, indent=2) + "\n", encoding="utf-8")
++        s.ledger_all(directory)
++        with (directory / "WALKFORWARD.py").open("a", encoding="utf-8") as handle:
++            handle.write("\n# edited\n")
++        with self.assertRaisesRegex(ValueError, "evidence changed"):
++            s.batch(directory)
 +
 +    def test_forged_or_foreign_walkforward_verdict_is_rejected(self):
 +        directory, goal = self.walkforward_batch()

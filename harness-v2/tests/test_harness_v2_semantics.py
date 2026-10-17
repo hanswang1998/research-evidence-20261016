@@ -196,6 +196,29 @@ class SchedulerBatchTests(Temp):
         # Replay reaches the second recorded sibling instead of stopping at one path.
         replayed = s.replay(world, {**s.initial_policy(), "max_attempts": 4})
         self.assertEqual(replayed["metrics"]["observed_nodes"], 2)
+        # The sibling width is part of the frozen boundary, not an editable batch field.
+        width_edit = json.loads((directory / "BATCH.json").read_text(encoding="utf-8"))
+        width_edit["branching"]["siblings"] = 3
+        (directory / "BATCH.json").write_text(json.dumps(width_edit, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "BATCH.json disagrees.*branching"):
+            s.batch(directory)
+
+    def test_edited_or_extra_sibling_decision_is_rejected(self):
+        directory, context = self.make_batch(siblings=2)
+        s.next_decision(directory, context["path"])
+        sibling = directory / "D0002.json"
+        honest = sibling.read_text(encoding="utf-8")
+        edited = json.loads(honest)
+        edited["sibling"]["index"] = 1
+        sibling.write_text(json.dumps(edited, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "D0002.json disagrees"):
+            s.next_decision(directory, context["path"])
+        sibling.write_text(honest, encoding="utf-8")
+        extra = json.loads(honest)
+        extra.update(id="D0003", sibling={**extra["sibling"], "index": 3})
+        s.write(directory / "D0003.json", extra)
+        with self.assertRaisesRegex(ValueError, "D0003.json disagrees"):
+            s.observe(directory, self.result("D0001", "qa")["path"])
 
     def test_single_decision_flow_is_unchanged(self):
         directory, context = self.make_batch(siblings=1)
@@ -261,11 +284,14 @@ class SchedulerBatchTests(Temp):
         s.cycle([str(world_path)], None, self.root / "cycle", "structure")
         goal, quality = self.quality()
         contract = self.save("walkforward", walk.DEFAULT_CONTRACT)
-        boundary = self.save("boundary", {"branch": "structure", "status": "first_scheduler_batch",
-                                          "affects_running_experiments": False, "evidence": [goal],
-                                          "quality_contract": quality, "walkforward_contract": contract})
+        boundary = {"branch": "structure", "status": "first_scheduler_batch",
+                    "affects_running_experiments": False, "evidence": [goal],
+                    "quality_contract": quality, "walkforward_contract": contract}
+        with self.assertRaisesRegex(ValueError, "bind walkforward_runtime"):
+            s.start_batch(self.root / "cycle" / "REPORT.json", self.save("unbound", boundary)["path"], self.root / "x")
+        boundary["walkforward_runtime"] = s.reference(ENGINE / "research_walkforward.py")
         directory = self.root / "batch"
-        s.start_batch(self.root / "cycle" / "REPORT.json", boundary["path"], directory)
+        s.start_batch(self.root / "cycle" / "REPORT.json", self.save("boundary", boundary)["path"], directory)
         context = self.save("context", {"branch": "structure", "context_complete": True, "evidence": [goal]})
         s.next_decision(directory, context["path"])
         return directory, goal
@@ -289,6 +315,22 @@ class SchedulerBatchTests(Temp):
             s.observe(directory, self.economic_result("valid_improvement", ref, [goal, worse, parent])["path"])
         observed = s.observe(directory, self.economic_result("valid_negative", ref, [goal, worse, parent])["path"])
         self.assertEqual(observed["walkforward_decision"], "fail")
+        # The stored verdict is recomputed on every read, not trusted from the O record.
+        record = directory / "O0001.json"
+        stored = json.loads(record.read_text(encoding="utf-8"))
+        stored["walkforward_decision"] = "pass"
+        stored["observation"]["status"] = "valid_improvement"
+        record.write_text(json.dumps(stored, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "O0001.json disagrees.*walkforward_decision"):
+            s.ledger_all(directory)
+        # So is the frozen scorer copy.
+        record.write_text(json.dumps({**stored, "walkforward_decision": "fail",
+                                      "observation": observed["observation"]}, indent=2) + "\n", encoding="utf-8")
+        s.ledger_all(directory)
+        with (directory / "WALKFORWARD.py").open("a", encoding="utf-8") as handle:
+            handle.write("\n# edited\n")
+        with self.assertRaisesRegex(ValueError, "evidence changed"):
+            s.batch(directory)
 
     def test_forged_or_foreign_walkforward_verdict_is_rejected(self):
         directory, goal = self.walkforward_batch()

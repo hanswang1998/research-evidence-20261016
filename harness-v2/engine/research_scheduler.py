@@ -93,6 +93,13 @@ def bound(ref):
     return path
 
 
+def drift(stored, expected):
+    """Top-level fields of a stored record that its bound inputs no longer reproduce (time excluded)."""
+    expected = json.loads(json.dumps(expected, ensure_ascii=False, allow_nan=False))
+    return sorted(key for key in stored.keys() | expected.keys()
+                  if key != "at" and (key not in stored or key not in expected or stored[key] != expected[key]))
+
+
 def number(value, nullable=False):
     return ((nullable and value is None) or
             (type(value) in (int, float) and math.isfinite(value) and value >= 0))
@@ -1661,27 +1668,32 @@ def check_harness_deployment(deployment, boundary):
 
 def batch(directory):
     obj = read(Path(directory) / "BATCH.json")
-    bound(obj["cycle_report"])
     require(digest(Path(__file__).read_bytes()) == obj["engine_sha256"],
             "engine changed: use the frozen cycle ENGINE.py")
     validate_policy(obj["policy"])
-    if obj.get("evaluation_contract"):
-        stage_contract(obj["evaluation_contract"])
-    if obj.get("cost_contract"):
-        cost_contract(obj["cost_contract"])
-    if obj.get("frontier_pilot"):
-        bound(obj["frontier_pilot"]["initial_frontier"])
-        for ref in obj["frontier_pilot"]["recent_decisions"]:
-            bound(ref)
-    if obj.get("harness_deployment"):
-        check_harness_deployment(obj["harness_deployment"], obj)
-    if obj.get("walkforward_contract"):
-        bound(obj["walkforward_contract"])
+    timestamp(obj["at"])
+    # Every field must still be what the bound report and boundary produce: a budget,
+    # policy or evaluator edited into BATCH.json is not a new boundary.
+    changed = drift(obj, frozen_batch(bound(obj["cycle_report"]), bound(obj["boundary"]), directory))
+    require(not changed, "BATCH.json disagrees with its bound cycle report and boundary: " + ", ".join(changed))
+    if obj.get("walkforward_runtime"):
         bound(obj["walkforward_runtime"])
     return obj
 
 
 def start_batch(report_path, boundary_path, output):
+    obj = frozen_batch(report_path, boundary_path, output)
+    output = Path(output).resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    if obj.get("walkforward_runtime"):
+        # Freeze the scorer with the contract so observe() can recompute every verdict.
+        (output / "WALKFORWARD.py").write_bytes(bound(read(boundary_path)["walkforward_runtime"]).read_bytes())
+    write(output / "BATCH.json", obj)
+    return obj
+
+
+def frozen_batch(report_path, boundary_path, output):
+    """BATCH.json content implied by a cycle report and a frozen boundary. Writes nothing."""
     report = read(report_path)
     contract = read(bound(report["contract"]))
     require(digest(Path(__file__).read_bytes()) == contract["engine"]["sha256"], "engine version mismatch")
@@ -1745,14 +1757,15 @@ def start_batch(report_path, boundary_path, output):
     walkforward = boundary.get("walkforward_contract")
     if walkforward is not None:
         require(read(bound(walkforward)).get("schema") == "research_walkforward.v1", "invalid walk-forward contract")
+        # The scorer is bound in the boundary too, so a recomputed BATCH.json names the same bytes.
+        require(isinstance(boundary.get("walkforward_runtime"), dict), "bind walkforward_runtime in the boundary")
+        bound(boundary["walkforward_runtime"])
     branching = boundary.get("branching")
     if branching is not None:
         # Parallel siblings give replay more than one recorded child per decision point.
         require(isinstance(branching, dict) and set(branching) == {"siblings"} and
                 type(branching["siblings"]) is int and 1 <= branching["siblings"] <= MAX_SIBLINGS,
                 "branching needs 1..%d siblings" % MAX_SIBLINGS)
-    output = Path(output).resolve()
-    output.mkdir(parents=True, exist_ok=False)
     obj = {"schema": SCHEMA, "at": now(), "branch": report["branch"],
            "cycle_report": reference(report_path), "boundary": reference(boundary_path),
            "engine_sha256": contract["engine"]["sha256"], "policy": report["next_policy"],
@@ -1774,14 +1787,9 @@ def start_batch(report_path, boundary_path, output):
     if branching is not None:
         obj["branching"] = branching
     if walkforward is not None:
-        # Freeze the scorer with the contract so observe() can recompute every verdict.
-        runtime = boundary.get("walkforward_runtime")
-        source = bound(runtime) if runtime else Path(__file__).with_name("research_walkforward.py")
-        require(source.exists(), "walk-forward runtime missing; bind walkforward_runtime in the boundary")
-        (output / "WALKFORWARD.py").write_bytes(source.read_bytes())
         obj["walkforward_contract"] = walkforward
-        obj["walkforward_runtime"] = reference(output / "WALKFORWARD.py")
-    write(output / "BATCH.json", obj)
+        obj["walkforward_runtime"] = {"path": str(Path(output).resolve() / "WALKFORWARD.py"),
+                                      "sha256": boundary["walkforward_runtime"]["sha256"]}
     return obj
 
 
@@ -1828,7 +1836,7 @@ def ledger_all(directory):
     directory = Path(directory)
     config = read(directory / "BATCH.json")
     decisions = sorted(directory.glob("D*.json"))
-    nodes, pending = [], []
+    nodes, pending, issued = [], [], {}
     for path in decisions:
         decision = read(path)
         require(bound(decision["batch"]) == (directory / "BATCH.json").resolve(), "wrong batch binding")
@@ -1836,6 +1844,21 @@ def ledger_all(directory):
         if decision.get("frontier"):
             validate_frontier(read(bound(decision["frontier"])), decision["branch"])
             bound(decision["selected"]["spec"])
+        # Records are recomputed from their bound inputs before they steer anything:
+        # an edited selection or outcome (even with re-hashed references) is rejected.
+        group = decision.get("sibling", {"group": decision["id"], "index": 1})
+        first = int(group["group"][1:])
+        visible = [n for n in nodes if int(n["id"][1:]) < first]
+        require(len(visible) == first - 1, path.name + " was issued while an earlier decision was pending")
+        require(all(timestamp(n["available_at"]) <= timestamp(decision["at"]) for n in visible),
+                "decision predates a visible result")
+        if group["group"] not in issued:
+            issued[group["group"]] = decision_records(directory, config, visible, bound(decision["context"]))
+        expected = issued[group["group"]]
+        if isinstance(expected, list):
+            expected = expected[group["index"] - 1] if group["index"] <= len(expected) else {}
+        changed = drift(decision, expected)
+        require(not changed, path.name + " disagrees with the state and context it was issued from: " + ", ".join(changed))
         outcome_path = directory / ("O" + path.name[1:])
         if not outcome_path.exists():
             pending.append(decision)
@@ -1847,6 +1870,9 @@ def ledger_all(directory):
             bound(outcome["grade_evidence"])
         for ref in outcome["evidence"]:
             bound(ref)
+        require(timestamp(outcome["at"]) >= timestamp(decision["at"]), "outcome predates its decision")
+        changed = drift(outcome, outcome_record(directory, config, decision, bound(outcome["input"])))
+        require(not changed, outcome_path.name + " disagrees with its bound result: " + ", ".join(changed))
         nodes.append({"id": outcome["node"], "parent": decision["selected"]["anchor"],
                       "depends_on": decision["visible_nodes"], "decision_at": decision["at"],
                       "available_at": outcome["at"], "observation": outcome["observation"],
@@ -1889,68 +1915,77 @@ def next_decision(directory, context_path):
             if len(pending) > 1:
                 waiting["decisions"] = [d["id"] for d in pending]
             return waiting
-        if has_override(nodes):
-            return reflection_due(config, nodes, "override recorded; export diagnostic and re-evaluate")
-        completed = {n["observation"]["question"] for n in nodes if
-                     n["observation"]["substantive"] and n["observation"]["resolved"]}
-        if len(completed) >= config["policy"]["reflection_every"]:
-            return reflection_due(config, nodes, "export then cycle; freeze next batch at boundary")
-        if config["mode"] == "pilot" and len(nodes) >= config["pilot_criteria"]["max_requests"]:
-            return reflection_due(config, nodes, "pilot request budget reached; review-pilot before continuing")
-        if config["mode"] == "frontier_pilot" and len(nodes) >= config["frontier_pilot"]["max_decisions"]:
-            return reflection_due(config, nodes, "frontier budget reached; review-pilot then export")
-        context = read(context_path)
-        require(context["branch"] == config["branch"], "context branch mismatch")
-        require(context["context_complete"] is True and context["evidence"], "visible context required")
-        for ref in context["evidence"]:
-            bound(ref)
-        if config.get("evaluation_contract") and config["mode"] != "frontier_pilot":
-            require(context.get("question") in stage_contract(config["evaluation_contract"])["questions"],
-                    "context needs a boundary-frozen stage question")
-        view = public_view(nodes, set(), len(nodes), config["policy"]["max_attempts"])
-        width = sibling_width(config, nodes, view)
-        frontier_ref, comparison = None, None
-        if config["mode"] == "frontier_pilot":
-            frontier_ref = context.get("frontier", config["frontier_pilot"]["initial_frontier"])
-            if config.get("harness_deployment"):
-                require(frontier_ref == config["frontier_pilot"]["initial_frontier"],
-                        "harness batch must use its frozen Agent-generated frontier")
-            selections, comparison = choose_frontier_siblings(read(bound(frontier_ref)), config, nodes, width)
-        else:
-            require("frontier" not in context, "frontier requires a boundary-frozen frontier pilot")
-            selected = choose(view, config["policy"])
-            selections = [selected] * width if selected else []
-        if not selections:
-            if comparison is not None:
-                return {"status": "frontier_exhausted", "comparison": comparison,
-                        "action": "prepare independent hypotheses or close this bounded pilot; do not duplicate a decision"}
-            return reflection_due(config, nodes, "policy stopped or decision budget exhausted")
-        first = len(nodes) + 1
-        written = []
-        for offset, selected in enumerate(selections):
-            index = first + offset
-            obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "id": f"D{index:04d}",
-                   "batch": reference(directory / "BATCH.json"), "context": reference(context_path),
-                   "policy_id": config["policy"]["id"], "view": view,
-                   "visible_nodes": [n["id"] for n in nodes], "selected": copy.deepcopy(selected),
-                   "instruction": "Generate one authorized research action from this anchor; bind this receipt in its frozen protocol. Log any override; do not silently ignore it."}
-            if frontier_ref:
-                obj.update(frontier=frontier_ref, comparison=comparison,
-                           instruction="Execute only the selected candidate specification under existing authorization. Bind this decision and candidate hash. Preserve all other hypotheses; preparation is independent of pending execution.")
-            if len(selections) > 1:
-                obj["sibling"] = {"group": f"D{first:04d}", "index": offset + 1, "size": len(selections)}
-                obj["instruction"] += (f" This is sibling {offset + 1} of {len(selections)} from the same visible state: "
-                                       "each sibling must test a different mechanism, not a parameter variant of another.")
-            if config.get("evaluation_contract"):
-                obj["question"] = selected["question"] if frontier_ref else context["question"]
-            if config.get("harness_deployment"):
-                obj["harness"] = config["harness_deployment"]
+        records = decision_records(directory, config, nodes, context_path)
+        if isinstance(records, dict):
+            return records
+        for obj in records:
             write(directory / (obj["id"] + ".json"), obj)
-            written.append(obj)
-        if len(written) == 1:
-            return written[0]
-        return {"status": "sibling_decisions", "decisions": written,
+        if len(records) == 1:
+            return records[0]
+        return {"status": "sibling_decisions", "decisions": records,
                 "action": "run every sibling under existing authorization; observe each result by its own decision id"}
+
+
+def decision_records(directory, config, nodes, context_path):
+    """Decisions (or a stop status) implied by observed nodes and a context. Writes nothing."""
+    if has_override(nodes):
+        return reflection_due(config, nodes, "override recorded; export diagnostic and re-evaluate")
+    completed = {n["observation"]["question"] for n in nodes if
+                 n["observation"]["substantive"] and n["observation"]["resolved"]}
+    if len(completed) >= config["policy"]["reflection_every"]:
+        return reflection_due(config, nodes, "export then cycle; freeze next batch at boundary")
+    if config["mode"] == "pilot" and len(nodes) >= config["pilot_criteria"]["max_requests"]:
+        return reflection_due(config, nodes, "pilot request budget reached; review-pilot before continuing")
+    if config["mode"] == "frontier_pilot" and len(nodes) >= config["frontier_pilot"]["max_decisions"]:
+        return reflection_due(config, nodes, "frontier budget reached; review-pilot then export")
+    context = read(context_path)
+    require(context["branch"] == config["branch"], "context branch mismatch")
+    require(context["context_complete"] is True and context["evidence"], "visible context required")
+    for ref in context["evidence"]:
+        bound(ref)
+    if config.get("evaluation_contract") and config["mode"] != "frontier_pilot":
+        require(context.get("question") in stage_contract(config["evaluation_contract"])["questions"],
+                "context needs a boundary-frozen stage question")
+    view = public_view(nodes, set(), len(nodes), config["policy"]["max_attempts"])
+    width = sibling_width(config, nodes, view)
+    frontier_ref, comparison = None, None
+    if config["mode"] == "frontier_pilot":
+        frontier_ref = context.get("frontier", config["frontier_pilot"]["initial_frontier"])
+        if config.get("harness_deployment"):
+            require(frontier_ref == config["frontier_pilot"]["initial_frontier"],
+                    "harness batch must use its frozen Agent-generated frontier")
+        selections, comparison = choose_frontier_siblings(read(bound(frontier_ref)), config, nodes, width)
+    else:
+        require("frontier" not in context, "frontier requires a boundary-frozen frontier pilot")
+        selected = choose(view, config["policy"])
+        selections = [selected] * width if selected else []
+    if not selections:
+        if comparison is not None:
+            return {"status": "frontier_exhausted", "comparison": comparison,
+                    "action": "prepare independent hypotheses or close this bounded pilot; do not duplicate a decision"}
+        return reflection_due(config, nodes, "policy stopped or decision budget exhausted")
+    first = len(nodes) + 1
+    records = []
+    for offset, selected in enumerate(selections):
+        index = first + offset
+        obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "id": f"D{index:04d}",
+               "batch": reference(directory / "BATCH.json"), "context": reference(context_path),
+               "policy_id": config["policy"]["id"], "view": view,
+               "visible_nodes": [n["id"] for n in nodes], "selected": copy.deepcopy(selected),
+               "instruction": "Generate one authorized research action from this anchor; bind this receipt in its frozen protocol. Log any override; do not silently ignore it."}
+        if frontier_ref:
+            obj.update(frontier=frontier_ref, comparison=comparison,
+                       instruction="Execute only the selected candidate specification under existing authorization. Bind this decision and candidate hash. Preserve all other hypotheses; preparation is independent of pending execution.")
+        if len(selections) > 1:
+            obj["sibling"] = {"group": f"D{first:04d}", "index": offset + 1, "size": len(selections)}
+            obj["instruction"] += (f" This is sibling {offset + 1} of {len(selections)} from the same visible state: "
+                                   "each sibling must test a different mechanism, not a parameter variant of another.")
+        if config.get("evaluation_contract"):
+            obj["question"] = selected["question"] if frontier_ref else context["question"]
+        if config.get("harness_deployment"):
+            obj["harness"] = config["harness_deployment"]
+        records.append(obj)
+    return records
 
 
 def sibling_width(config, nodes, view):
@@ -1987,75 +2022,81 @@ def observe(directory, result_path):
         config = batch(directory)
         nodes, pendings = ledger_all(directory)
         require(bool(pendings), "no pending decision")
-        result = read(result_path)
-        pending = next((d for d in pendings if d["id"] == result.get("decision_id")), None)
-        require(result["branch"] == config["branch"] and pending is not None, "result identity mismatch")
-        index = int(pending["id"][1:])
-        require(type(result["decision_followed"]) is bool, "decision_followed required")
-        if not result["decision_followed"]:
-            require(bool(result.get("override_reason")), "override reason required")
-        observation = copy.deepcopy(result["observation"])
-        validate_observation(observation)
-        if pending.get("frontier"):
-            require(result.get("candidate_id") == pending["selected"]["candidate_id"] and
-                    observation["question"] == pending["selected"]["question"], "candidate result identity mismatch")
-        economic = observation["status"] in {"valid_improvement", "valid_negative"}
-        computed_quality = None
-        account_scorecard = None
-        validated = walkforward_decision(config, result) if economic else None
-        if economic:
-            if quality_contract(config["quality_contract"])["schema"] == "research_quality.v2":
-                account_scorecard = review_account(config["quality_contract"], result["grade_evidence"])
-                computed_quality = account_scorecard["quality"]
-                improved = account_scorecard["decision"] in {"return_improved", "risk_repair_tradeoff"}
-                # With a frozen walk-forward contract, a development-window gain alone is not an improvement.
-                if validated is not None:
-                    improved = improved and validated == "pass"
-                expected = "valid_improvement" if improved else "valid_negative"
-                require(observation["status"] == expected, "outcome status disagrees with account scorecard / walk-forward")
-            else:
-                computed_quality = grade(config["quality_contract"], result["grade_evidence"])
-                require(observation["status"] != "valid_improvement" or validated in {None, "pass"},
-                        "valid_improvement requires a walk-forward pass in this batch")
-        require(observation["quality"] is None or observation["quality"] == computed_quality,
-                "manual quality disagrees with frozen evaluator")
-        observation["quality"] = computed_quality
-        stage_review = None
-        if config.get("evaluation_contract"):
-            require(observation["question"] == pending["question"], "decision stage question mismatch")
-            stage_review = evaluate_stage(config["evaluation_contract"], result.get("stage_evidence"), observation)
-        else:
-            require(not result.get("stage_evidence"), "stage evidence requires a frozen evaluation contract")
-        require(number(result["measured_seconds"], True) and number(result["total_seconds"], True), "invalid cost")
-        if result["total_seconds"] is not None and result["measured_seconds"] is not None:
-            require(result["total_seconds"] >= result["measured_seconds"], "total below measured cost")
-        require(result["evidence"], "result evidence required")
-        for ref in result["evidence"]:
-            bound(ref)
-        require(not result.get("cost_receipt") or config.get("cost_contract"), "cost receipt requires a frozen contract")
-        cost_node = {"id": f"n{index:04d}", "cost_receipt": result.get("cost_receipt"),
-                     "evidence": [reference(directory / (pending["id"] + ".json"))]}
+        pending = next((d for d in pendings if d["id"] == read(result_path).get("decision_id")), None)
+        require(pending is not None, "result identity mismatch")
+        obj = outcome_record(directory, config, pending, result_path)
+        cost_node = {"id": obj["node"], "cost_receipt": obj.get("cost_receipt"), "evidence": [obj["decision"]]}
         node_costs(config, nodes + [cost_node])
-        obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "node": f"n{index:04d}",
-               "decision": reference(directory / (pending["id"] + ".json")),
-               "input": reference(result_path), "observation": observation,
-               "grade_evidence": result.get("grade_evidence") if economic else None,
-               "decision_followed": result["decision_followed"], "override_reason": result.get("override_reason"),
-               "measured_seconds": result["measured_seconds"], "total_seconds": result["total_seconds"],
-               "evidence": result["evidence"]}
-        if account_scorecard is not None:
-            obj["account_scorecard"] = account_scorecard
-        if result.get("walkforward"):
-            obj["walkforward"] = result["walkforward"]
-            obj["walkforward_decision"] = validated
-        if stage_review is not None:
-            obj.update(stage_review=stage_review, stage_evidence=result["stage_evidence"])
-        if result.get("cost_receipt"):
-            obj["cost_receipt"] = result["cost_receipt"]
-        if pending.get("harness"):
-            obj["harness"] = pending["harness"]
-        write(directory / f"O{index:04d}.json", obj)
+        write(directory / ("O" + pending["id"][1:] + ".json"), obj)
         return obj
+
+
+def outcome_record(directory, config, pending, result_path):
+    """The O record implied by a pending decision and its result file. Writes nothing."""
+    result = read(result_path)
+    require(result["branch"] == config["branch"] and result["decision_id"] == pending["id"], "result identity mismatch")
+    index = int(pending["id"][1:])
+    require(type(result["decision_followed"]) is bool, "decision_followed required")
+    if not result["decision_followed"]:
+        require(bool(result.get("override_reason")), "override reason required")
+    observation = copy.deepcopy(result["observation"])
+    validate_observation(observation)
+    if pending.get("frontier"):
+        require(result.get("candidate_id") == pending["selected"]["candidate_id"] and
+                observation["question"] == pending["selected"]["question"], "candidate result identity mismatch")
+    economic = observation["status"] in {"valid_improvement", "valid_negative"}
+    computed_quality = None
+    account_scorecard = None
+    validated = walkforward_decision(config, result) if economic else None
+    if economic:
+        if quality_contract(config["quality_contract"])["schema"] == "research_quality.v2":
+            account_scorecard = review_account(config["quality_contract"], result["grade_evidence"])
+            computed_quality = account_scorecard["quality"]
+            improved = account_scorecard["decision"] in {"return_improved", "risk_repair_tradeoff"}
+            # With a frozen walk-forward contract, a development-window gain alone is not an improvement.
+            if validated is not None:
+                improved = improved and validated == "pass"
+            expected = "valid_improvement" if improved else "valid_negative"
+            require(observation["status"] == expected, "outcome status disagrees with account scorecard / walk-forward")
+        else:
+            computed_quality = grade(config["quality_contract"], result["grade_evidence"])
+            require(observation["status"] != "valid_improvement" or validated in {None, "pass"},
+                    "valid_improvement requires a walk-forward pass in this batch")
+    require(observation["quality"] is None or observation["quality"] == computed_quality,
+            "manual quality disagrees with frozen evaluator")
+    observation["quality"] = computed_quality
+    stage_review = None
+    if config.get("evaluation_contract"):
+        require(observation["question"] == pending["question"], "decision stage question mismatch")
+        stage_review = evaluate_stage(config["evaluation_contract"], result.get("stage_evidence"), observation)
+    else:
+        require(not result.get("stage_evidence"), "stage evidence requires a frozen evaluation contract")
+    require(number(result["measured_seconds"], True) and number(result["total_seconds"], True), "invalid cost")
+    if result["total_seconds"] is not None and result["measured_seconds"] is not None:
+        require(result["total_seconds"] >= result["measured_seconds"], "total below measured cost")
+    require(result["evidence"], "result evidence required")
+    for ref in result["evidence"]:
+        bound(ref)
+    require(not result.get("cost_receipt") or config.get("cost_contract"), "cost receipt requires a frozen contract")
+    obj = {"schema": SCHEMA, "at": now(), "branch": config["branch"], "node": f"n{index:04d}",
+           "decision": reference(directory / (pending["id"] + ".json")),
+           "input": reference(result_path), "observation": observation,
+           "grade_evidence": result.get("grade_evidence") if economic else None,
+           "decision_followed": result["decision_followed"], "override_reason": result.get("override_reason"),
+           "measured_seconds": result["measured_seconds"], "total_seconds": result["total_seconds"],
+           "evidence": result["evidence"]}
+    if account_scorecard is not None:
+        obj["account_scorecard"] = account_scorecard
+    if result.get("walkforward"):
+        obj["walkforward"] = result["walkforward"]
+        obj["walkforward_decision"] = validated
+    if stage_review is not None:
+        obj.update(stage_review=stage_review, stage_evidence=result["stage_evidence"])
+    if result.get("cost_receipt"):
+        obj["cost_receipt"] = result["cost_receipt"]
+    if pending.get("harness"):
+        obj["harness"] = pending["harness"]
+    return obj
 
 
 def review_pilot(directory):

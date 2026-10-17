@@ -38,7 +38,7 @@ index 0000000..dac56b5
 +}
 diff --git "a/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md" "b/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md"
 new file mode 100644
-index 0000000..cc026f1
+index 0000000..58c4bce
 --- /dev/null
 +++ "b/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md"
 @@ -0,0 +1,60 @@
@@ -83,7 +83,7 @@ index 0000000..cc026f1
 +python -X utf8 -B engine/research_walkforward.py evaluate --contract <冻结合同> --candidate <候选逐日权益> --parent <父本逐日权益> --out <Agent可读>/WALKFORWARD.json --detail-out <控制器专用>/WALKFORWARD_DETAIL.json
 +```
 +
-+候选与父本的交易日历必须完全一致，否则拒绝计算；每个窗口的行数不得低于该窗口工作日数的 85%（`min_calendar_coverage`），否则该折记 `calendar_gap`，整体为 `insufficient_data`。这是为了防止删掉部分日期后按更少的天数年化、制造出胜出折。批次冻结合同时，`start-batch` 会把打分器复制进批次；`observe` 用它从裁决里写明、且列在本结果证据中的两份权益文件重算，结论不一致即拒绝，所以不能拿别的实验或手写的 `pass` 文件充数。
++候选与父本的交易日历必须完全一致，否则拒绝计算；每个窗口的行数不得低于该窗口工作日数的 85%（`min_calendar_coverage`），否则该折记 `calendar_gap`，整体为 `insufficient_data`。这是为了防止删掉部分日期后按更少的天数年化、制造出胜出折。边界冻结合同时须同时用 `walkforward_runtime: {path, sha256}` 绑定打分器文件，`start-batch` 把它复制进批次；`observe` 用它从裁决里写明、且列在本结果证据中的两份权益文件重算，结论不一致即拒绝，所以不能拿别的实验或手写的 `pass` 文件充数。
 +
 +逐日权益接受 JSON 列表 `[{"date": "...", "equity": ...}]`、带 `equity_curve`／`daily`／`series` 的 JSON 对象，或含 date 与 equity（或 total_value／value／nav）列的 CSV。2026-01-01 起的行一律不读，并在 `sealed_rows_ignored` 中计数。`--detail-out` 的完整数字放在 Agent 不读取的位置；这是约定，须如实记录是否被打开。
 +
