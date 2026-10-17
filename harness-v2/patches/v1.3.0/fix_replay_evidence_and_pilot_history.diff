@@ -1,0 +1,351 @@
+diff --git "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md" "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
+index 5ccbba9..a19b4fd 100644
+--- "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
++++ "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
+@@ -370,6 +370,8 @@ v1 历史继续只用于身份链和排重；v2 可复用 P0 已明确的有效
+ 
+ 新的 `batch / ledger` 读取链将 BATCH、D、O 当作可核对的派生记录：从绑定的 cycle 报告与 BOUNDARY 重建预算／policy／评价字段，从此前可见节点与 CONTEXT 重建选择，从原 RESULT 输入重建状态／评分／成本。任何派生字段不一致均拒绝，包括只改记录后重新计算下游引用哈希；不能直接改 BATCH 或 O 将未知写成通过。时间字段单独核对可解析性与先后关系，D 编号须连续且与文件名一致，O 必须有对应 D，最多仅末项 D 待结果。
+ 
++重算只核对记录自身的输入：cycle 报告、BOUNDARY、CONTEXT、RESULT 文件本身。它们所附的证据清单（共享规则文档、CURRENT_RULES、协议、目标文件、候选依据）已在写入时核对，之后不再逐次重核；否则编辑一份共享文档，所有引用过它的在途批次都会以“evidence changed”停下。新的决策和结果仍在写入时核对各自引用的证据，篡改派生字段照样拒绝。
++
+ 发现不一致时保留原件与错误，按原任务身份核实；不重提实验、不覆盖冻结记录，也不为消除报错修改预期哈希。真实规则变化在下一合法未冻结边界重新绑定。该检查核对绑定原件之间的一致性，不能证明被整体替换的证据或外部执行为真。
+ 
+ Harness 的 `previous_review → REFLECTION_TASK` 同步接入有界历史、同案例成功／失败对照和三轮无合格收益后的删减提示，细节见 [Harness 反思与改进](Harness反思与改进.md)。只影响新冻结版本；现有账户判据、各线目标、RRSI 准入与旧批次 ENGINE 保持原约束。
+diff --git a/engine/research_harness.py b/engine/research_harness.py
+index a3af699..8420b97 100644
+--- a/engine/research_harness.py
++++ b/engine/research_harness.py
+@@ -83,10 +83,13 @@ def lineage(s, cfg):
+                   review["next_harness"] == expected_parent, "reflection history parent or branch mismatch")
+         previous = s.read(s.bound(review["contract"]))
+         incumbent_size = bundle_size(s.read(s.bound(review["incumbent"])))
++        # A pilot re-runs the development winner, whose proposal belongs to the round that offered the pilot.
++        owners = [review["contract"]] + ([s.read(s.bound(previous["pilot_offer"]))["contract"]]
++                                         if previous.get("pilot_offer") else [])
+         candidates = []
+         for item in review["comparisons"]:
+             proposal = s.read(s.bound(item["proposal"]))
+-            s.require(proposal["contract"] == review["contract"] and proposal["bundle"] == item["bundle"],
++            s.require(proposal["contract"] in owners and proposal["bundle"] == item["bundle"],
+                       "history proposal binding mismatch")
+             s.bound(proposal["input"])
+             s.bound(proposal["review"])
+diff --git a/engine/research_scheduler.py b/engine/research_scheduler.py
+index 7711aa4..087bd2b 100644
+--- a/engine/research_scheduler.py
++++ b/engine/research_scheduler.py
+@@ -83,6 +83,31 @@ def bound(ref):
+     return path
+ 
+ 
++REPLAY = {"active": False}
++
++
++@contextmanager
++def replaying():
++    """Re-derive stored records from their own inputs without re-checking supporting evidence.
++
++    Context, boundary, protocol, goal and spec evidence is hash-checked when a record is written.
++    It often cites living documents (shared rules, CURRENT_RULES.md); re-checking it on every later
++    read stops a running batch whenever such a document is edited, while saying nothing about
++    whether the stored record still follows from its inputs.
++    """
++    previous = REPLAY["active"]
++    REPLAY["active"] = True
++    try:
++        yield
++    finally:
++        REPLAY["active"] = previous
++
++
++def attested(ref):
++    """Supporting evidence: verified when a record is written, not again while re-deriving it."""
++    return Path(ref["path"]) if REPLAY["active"] else bound(ref)
++
++
+ def drift(stored, expected):
+     """Top-level fields of a stored record that its bound inputs no longer reproduce (time excluded)."""
+     expected = json.loads(json.dumps(expected, ensure_ascii=False, allow_nan=False))
+@@ -127,7 +152,7 @@ def stage_contract(ref):
+         require(criterion["op"] == "eq" or type(expected) is not bool, "ordered boolean criterion")
+         ids.append(criterion["id"])
+     require(len(ids) == len(set(ids)), "duplicate stage criterion")
+-    bound(obj["protocol"])
++    attested(obj["protocol"])
+     return obj
+ 
+ 
+@@ -290,7 +315,7 @@ def quality_contract(ref):
+                 "invalid frozen annual floor")
+     for field in ["annual_path", "drawdown_path", "correctness_path"]:
+         require(isinstance(contract[field], str) and contract[field], "metric field path required")
+-    bound(contract["goal_source"])
++    attested(contract["goal_source"])
+     return contract
+ 
+ 
+@@ -352,7 +377,7 @@ def validate_account_contract(contract):
+     require(sha256_string(account["fees_sha256"]) and sha256_string(account["execution_sha256"]),
+             "freeze fee and execution assumptions")
+     require(sha256_string(contract["baseline_source_sha256"]), "fixed baseline source hash required")
+-    bound(contract["protocol"])
++    attested(contract["protocol"])
+ 
+ 
+ def review_account(contract_ref, evidence_ref):
+@@ -376,7 +401,7 @@ def review_account(contract_ref, evidence_ref):
+         refs = account.get("verification_refs")
+         require(isinstance(refs, list) and refs, name + ": original independent review required")
+         for ref in refs:
+-            bound(ref)
++            attested(ref)
+         for key in ["net_return", "net_profit"]:
+             require(account.get(key) is not None and score_number(account[key]), name + ": missing net result")
+         require(account["net_return"] >= -1 and number(account.get("max_drawdown")) and
+@@ -559,7 +584,7 @@ def validate_frontier(frontier, branch):
+             "frontier scope mismatch")
+     require(bool(frontier["generation_evidence"]), "candidate generation evidence required")
+     for ref in frontier["generation_evidence"]:
+-        bound(ref)
++        attested(ref)
+     candidates = frontier["candidates"]
+     require(isinstance(candidates, list) and candidates, "empty candidate frontier")
+     seen = set()
+@@ -593,7 +618,7 @@ def validate_frontier(frontier, branch):
+             require(bool(spec.get(field)), "candidate spec missing " + field)
+         require(bool(spec["source_evidence"]), "candidate evidence required")
+         for ref in spec["source_evidence"]:
+-            bound(ref)
++            attested(ref)
+     require(len(active) <= 8, "keep at most eight active hypotheses; preserve others as deferred")
+     shortfall = len(active) < 6 or len(set(active.values())) < 3
+     if shortfall:
+@@ -625,13 +650,13 @@ def frontier_selector(config):
+     contract = read(bound(pilot["selection_contract"]))
+     require(contract["schema"] == "research_frontier_selector.v1" and contract["rule"] == rule and
+             contract["branch"] == config["branch"], "selector contract scope mismatch")
+-    bound(contract["plan"])
++    attested(contract["plan"])
+     bottleneck = contract["bottleneck"]
+     require(all(isinstance(bottleneck.get(k), str) and bottleneck[k].strip() for k in ("id", "statement")),
+             "selector needs an explicit economic bottleneck")
+     require(bool(bottleneck["evidence"]), "bottleneck evidence required")
+     for ref in bottleneck["evidence"]:
+-        bound(ref)
++        attested(ref)
+     require(contract["cost_basis"] == "spec_budget_resource_seconds", "unsupported estimated cost basis")
+     return contract
+ 
+@@ -647,7 +672,7 @@ def selection_basis(candidate, contract):
+     require(isinstance(basis["rationale"], str) and basis["rationale"].strip(), "selection rationale required")
+     require(bool(basis["evidence"]), "selection evidence required")
+     for ref in basis["evidence"]:
+-        bound(ref)
++        attested(ref)
+     contrast = basis["discrimination"]
+     require(contrast["level"] in {"separates", "constrains", "none"}, "invalid discrimination level")
+     require(isinstance(contrast["rationale"], str) and contrast["rationale"].strip(), "contrast rationale required")
+@@ -1446,7 +1471,8 @@ def batch(directory):
+     timestamp(obj["at"])
+     # Every field must still be what the bound report and boundary produce: a budget,
+     # policy or evaluator edited into BATCH.json is not a new boundary.
+-    changed = drift(obj, frozen_batch(bound(obj["cycle_report"]), bound(obj["boundary"])))
++    with replaying():
++        changed = drift(obj, frozen_batch(bound(obj["cycle_report"]), bound(obj["boundary"])))
+     require(not changed, "BATCH.json disagrees with its bound cycle report and boundary: " + ", ".join(changed))
+     return obj
+ 
+@@ -1470,7 +1496,7 @@ def frozen_batch(report_path, boundary_path):
+     require(boundary["affects_running_experiments"] is False, "cannot replace a running batch")
+     require(bool(boundary["evidence"]), "boundary evidence required")
+     for ref in boundary["evidence"]:
+-        bound(ref)
++        attested(ref)
+     quality_contract(boundary["quality_contract"])
+     stage = evaluation_stage(boundary)
+     if boundary.get("cost_contract"):
+@@ -1564,7 +1590,8 @@ def ledger(directory):
+         # an edited selection or outcome (even with re-hashed references) is rejected.
+         require(all(timestamp(n["available_at"]) <= timestamp(decision["at"]) for n in nodes),
+                 "decision predates a visible result")
+-        changed = drift(decision, decision_record(directory, config, nodes, bound(decision["context"])))
++        with replaying():
++            changed = drift(decision, decision_record(directory, config, nodes, bound(decision["context"])))
+         require(not changed, path.name + " disagrees with the state and context it was issued from: " + ", ".join(changed))
+         outcome_path = directory / ("O" + path.name[1:])
+         if not outcome_path.exists():
+@@ -1579,7 +1606,8 @@ def ledger(directory):
+         for ref in outcome["evidence"]:
+             bound(ref)
+         require(timestamp(outcome["at"]) >= timestamp(decision["at"]), "outcome predates its decision")
+-        changed = drift(outcome, outcome_record(directory, config, decision, bound(outcome["input"])))
++        with replaying():
++            changed = drift(outcome, outcome_record(directory, config, decision, bound(outcome["input"])))
+         require(not changed, outcome_path.name + " disagrees with its bound result: " + ", ".join(changed))
+         nodes.append({"id": outcome["node"], "parent": decision["selected"]["anchor"],
+                       "depends_on": decision["visible_nodes"], "decision_at": decision["at"],
+@@ -1642,7 +1670,7 @@ def decision_record(directory, config, nodes, context_path):
+     require(context["branch"] == config["branch"], "context branch mismatch")
+     require(context["context_complete"] is True and context["evidence"], "visible context required")
+     for ref in context["evidence"]:
+-        bound(ref)
++        attested(ref)
+     if config.get("evaluation_contract") and config["mode"] != "frontier_pilot":
+         require(context.get("question") in stage_contract(config["evaluation_contract"])["questions"],
+                 "context needs a boundary-frozen stage question")
+diff --git a/tests/test_replay_and_history.py b/tests/test_replay_and_history.py
+new file mode 100644
+index 0000000..a3df94d
+--- /dev/null
++++ b/tests/test_replay_and_history.py
+@@ -0,0 +1,150 @@
++"""Regressions from the 1.3.0 review (2026-10-17).
++
++1. Re-deriving a stored BATCH/D/O must not re-check the evidence lists it cited when it was written.
++   Decision contexts cite living documents (39 of 2,804 real contexts cite shared rule docs or
++   CURRENT_RULES.md, and each harness release edits those docs); re-checking them on every read
++   stopped a running batch at the next doc edit. Tampering with the records is still rejected.
++2. A new harness round must be able to learn from a pilot round's REVIEW: the pilot re-runs the
++   development winner, whose proposal belongs to the round that offered the pilot.
++
++Scheduler tests use only v1 features, so they run on 1.3.0 and on the harness-v2 branch alike.
++The harness test reuses the original fixtures and is skipped without tests/test_research_frontier.py.
++Run from the project root:  python -X utf8 -B -m unittest discover -s tests -p "test_replay_and_history.py" -v
++"""
++import importlib.util
++import json
++from pathlib import Path
++import tempfile
++import unittest
++
++ENGINE = Path(__file__).resolve().parent.parent / "engine"
++spec = importlib.util.spec_from_file_location("research_scheduler", ENGINE / "research_scheduler.py")
++s = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(s)
++
++try:
++    import test_research_harness as original
++except ImportError:  # test_research_frontier.py is not in every checkout
++    original = None
++
++
++class ReplayEvidenceTests(unittest.TestCase):
++    def setUp(self):
++        self._tmp = tempfile.TemporaryDirectory()
++        self.root = Path(self._tmp.name)
++        self.serial = 0
++        self.doc = self.root / "研究调度运行手册.md"
++        self.doc.write_text("shared runbook, release 1\n", encoding="utf-8")
++        self.goal_doc = self.root / "当前研究目标.md"
++        self.goal_doc.write_text("goal, release 1\n", encoding="utf-8")
++
++    def tearDown(self):
++        self._tmp.cleanup()
++
++    def save(self, name, value):
++        self.serial += 1
++        path = self.root / f"{self.serial:04d}-{name}.json"
++        s.write(path, value)
++        return s.reference(path)
++
++    def text(self, name, body):
++        path = self.root / name
++        path.write_text(body, encoding="utf-8")
++        return s.reference(path)
++
++    def start(self):
++        evidence = self.text("n1.txt", "n1")
++        node = {"id": "n1", "parent": "root", "depends_on": [], "decision_at": "2026-10-01T00:00:00+00:00",
++                "available_at": "2026-10-01T01:00:00+00:00",
++                "observation": {"status": "verified_information", "quality": None, "question": "q",
++                                "resolved": True, "substantive": True},
++                "measured_seconds": 1.0, "total_seconds": 2.0, "evidence": [evidence]}
++        s.write(self.root / "world.json", {"schema": s.SCHEMA, "id": "w", "branch": "structure",
++                                          "admission": "diagnostic", "usage": "development", "limitations": [],
++                                          "initial_quality": 0.5, "metric_contract": "t", "nodes": [node]})
++        s.cycle([str(self.root / "world.json")], None, self.root / "cycle", "structure")
++        quality = self.save("quality", {"schema": "research_quality.v1", "kind": "risk_cap_return_v1",
++                                        "drawdown_ceiling": 0.2, "annual_path": "annual", "drawdown_path": "mdd",
++                                        "correctness_path": "ok", "goal_source": s.reference(self.goal_doc)})
++        boundary = self.save("boundary", {"branch": "structure", "status": "first_scheduler_batch",
++                                          "affects_running_experiments": False,
++                                          "evidence": [s.reference(self.doc)], "quality_contract": quality})
++        self.batch = self.root / "batch"
++        s.start_batch(self.root / "cycle" / "REPORT.json", boundary["path"], self.batch)
++
++    def context(self):
++        return self.save("context", {"branch": "structure", "context_complete": True,
++                                     "evidence": [s.reference(self.doc), s.reference(self.goal_doc)]})
++
++    def observe(self, decision_id, status="verified_information"):
++        result = {"branch": "structure", "decision_id": decision_id, "decision_followed": True,
++                  "observation": {"status": status, "quality": None, "question": "q-" + decision_id,
++                                  "resolved": True, "substantive": True},
++                  "measured_seconds": 1.0, "total_seconds": 2.0,
++                  "evidence": [self.text(decision_id + ".txt", decision_id)]}
++        if status in {"valid_improvement", "valid_negative"}:
++            result["grade_evidence"] = self.save("grade", {"annual": 0.1, "mdd": 0.15, "ok": True})
++        return s.observe(self.batch, self.save("result", result)["path"])
++
++    def test_editing_a_doc_cited_by_an_earlier_context_keeps_the_batch_running(self):
++        self.start()
++        first = s.next_decision(self.batch, self.context()["path"])
++        self.observe(first["id"])
++        self.doc.write_text("shared runbook, release 2\n", encoding="utf-8")
++        self.assertEqual(s.next_decision(self.batch, self.context()["path"])["id"], "D0002")
++
++    def test_editing_the_goal_doc_after_an_economic_outcome_keeps_the_batch_running(self):
++        self.start()
++        first = s.next_decision(self.batch, self.context()["path"])
++        self.observe(first["id"], status="valid_negative")
++        self.goal_doc.write_text("goal, release 2\n", encoding="utf-8")
++        self.assertEqual(s.next_decision(self.batch, self.context()["path"])["selected"],
++                         {"anchor": "root", "action": "explore"})
++
++    def test_a_new_decision_still_checks_its_own_context_evidence(self):
++        self.start()
++        stale = self.context()
++        self.doc.write_text("shared runbook, release 2\n", encoding="utf-8")
++        with self.assertRaisesRegex(ValueError, "evidence changed"):
++            s.next_decision(self.batch, stale["path"])
++        self.assertFalse((self.batch / "D0001.json").exists())
++        self.assertFalse(s.REPLAY["active"])
++
++    def test_edited_records_are_still_rejected_after_a_doc_edit(self):
++        self.start()
++        first = s.next_decision(self.batch, self.context()["path"])
++        self.observe(first["id"], status="valid_negative")
++        self.doc.write_text("shared runbook, release 2\n", encoding="utf-8")
++        outcome = self.batch / "O0001.json"
++        stored = json.loads(outcome.read_text(encoding="utf-8"))
++        stored["observation"]["status"] = "valid_improvement"
++        outcome.write_text(json.dumps(stored, indent=2) + "\n", encoding="utf-8")
++        with self.assertRaisesRegex(ValueError, "O0001.json disagrees"):
++            s.next_decision(self.batch, self.context()["path"])
++        self.assertFalse(s.REPLAY["active"])
++
++
++if original is not None:
++    Fixture = type("Fixture", (unittest.TestCase,),
++                   {k: v for k, v in vars(original.HarnessTests).items() if not k.startswith("test")})
++else:
++    Fixture = unittest.TestCase
++
++
++@unittest.skipIf(original is None, "needs tests/test_research_frontier.py from the project")
++class PilotHistoryTests(Fixture):
++    def test_new_round_can_learn_from_a_pilot_review(self):
++        directory, candidate, _ = self.compared()
++        entry = self.make_case("pilot-new")
++        pilot = self.start_round(kind="prospective_pilot", pilot_offer=s.reference(directory / "REVIEW.json"), cases=[entry])
++        self.attempt(pilot, self.base, entry, checks=(True, False))
++        self.attempt(pilot, candidate, entry)
++        self.assertEqual(self.call(pilot, "review")["decision"], "supported_in_bounded_pilot")
++        follow = self.start_round(incumbent=candidate, previous_review=s.reference(pilot / "REVIEW.json"))
++        task = s.read(follow / "REFLECTION_TASK.json")
++        self.assertEqual(task["lineage"][-1]["kind"], "prospective_pilot")
++        self.assertEqual(task["lineage"][-1]["candidates"][0]["bundle"], candidate)
++
++
++if __name__ == "__main__":
++    unittest.main()

@@ -93,6 +93,31 @@ def bound(ref):
     return path
 
 
+REPLAY = {"active": False}
+
+
+@contextmanager
+def replaying():
+    """Re-derive stored records from their own inputs without re-checking supporting evidence.
+
+    Context, boundary, protocol, goal and spec evidence is hash-checked when a record is written.
+    It often cites living documents (shared rules, CURRENT_RULES.md); re-checking it on every later
+    read stops a running batch whenever such a document is edited, while saying nothing about
+    whether the stored record still follows from its inputs.
+    """
+    previous = REPLAY["active"]
+    REPLAY["active"] = True
+    try:
+        yield
+    finally:
+        REPLAY["active"] = previous
+
+
+def attested(ref):
+    """Supporting evidence: verified when a record is written, not again while re-deriving it."""
+    return Path(ref["path"]) if REPLAY["active"] else bound(ref)
+
+
 def drift(stored, expected):
     """Top-level fields of a stored record that its bound inputs no longer reproduce (time excluded)."""
     expected = json.loads(json.dumps(expected, ensure_ascii=False, allow_nan=False))
@@ -137,7 +162,7 @@ def stage_contract(ref):
         require(criterion["op"] == "eq" or type(expected) is not bool, "ordered boolean criterion")
         ids.append(criterion["id"])
     require(len(ids) == len(set(ids)), "duplicate stage criterion")
-    bound(obj["protocol"])
+    attested(obj["protocol"])
     return obj
 
 
@@ -300,7 +325,7 @@ def quality_contract(ref):
                 "invalid frozen annual floor")
     for field in ["annual_path", "drawdown_path", "correctness_path"]:
         require(isinstance(contract[field], str) and contract[field], "metric field path required")
-    bound(contract["goal_source"])
+    attested(contract["goal_source"])
     return contract
 
 
@@ -362,7 +387,7 @@ def validate_account_contract(contract):
     require(sha256_string(account["fees_sha256"]) and sha256_string(account["execution_sha256"]),
             "freeze fee and execution assumptions")
     require(sha256_string(contract["baseline_source_sha256"]), "fixed baseline source hash required")
-    bound(contract["protocol"])
+    attested(contract["protocol"])
 
 
 def review_account(contract_ref, evidence_ref):
@@ -386,7 +411,7 @@ def review_account(contract_ref, evidence_ref):
         refs = account.get("verification_refs")
         require(isinstance(refs, list) and refs, name + ": original independent review required")
         for ref in refs:
-            bound(ref)
+            attested(ref)
         for key in ["net_return", "net_profit"]:
             require(account.get(key) is not None and score_number(account[key]), name + ": missing net result")
         require(account["net_return"] >= -1 and number(account.get("max_drawdown")) and
@@ -569,7 +594,7 @@ def validate_frontier(frontier, branch):
             "frontier scope mismatch")
     require(bool(frontier["generation_evidence"]), "candidate generation evidence required")
     for ref in frontier["generation_evidence"]:
-        bound(ref)
+        attested(ref)
     candidates = frontier["candidates"]
     require(isinstance(candidates, list) and candidates, "empty candidate frontier")
     seen = set()
@@ -603,7 +628,7 @@ def validate_frontier(frontier, branch):
             require(bool(spec.get(field)), "candidate spec missing " + field)
         require(bool(spec["source_evidence"]), "candidate evidence required")
         for ref in spec["source_evidence"]:
-            bound(ref)
+            attested(ref)
     require(len(active) <= 8, "keep at most eight active hypotheses; preserve others as deferred")
     shortfall = len(active) < 6 or len(set(active.values())) < 3
     if shortfall:
@@ -635,13 +660,13 @@ def frontier_selector(config):
     contract = read(bound(pilot["selection_contract"]))
     require(contract["schema"] == "research_frontier_selector.v1" and contract["rule"] == rule and
             contract["branch"] == config["branch"], "selector contract scope mismatch")
-    bound(contract["plan"])
+    attested(contract["plan"])
     bottleneck = contract["bottleneck"]
     require(all(isinstance(bottleneck.get(k), str) and bottleneck[k].strip() for k in ("id", "statement")),
             "selector needs an explicit economic bottleneck")
     require(bool(bottleneck["evidence"]), "bottleneck evidence required")
     for ref in bottleneck["evidence"]:
-        bound(ref)
+        attested(ref)
     require(contract["cost_basis"] == "spec_budget_resource_seconds", "unsupported estimated cost basis")
     return contract
 
@@ -657,7 +682,7 @@ def selection_basis(candidate, contract):
     require(isinstance(basis["rationale"], str) and basis["rationale"].strip(), "selection rationale required")
     require(bool(basis["evidence"]), "selection evidence required")
     for ref in basis["evidence"]:
-        bound(ref)
+        attested(ref)
     contrast = basis["discrimination"]
     require(contrast["level"] in {"separates", "constrains", "none"}, "invalid discrimination level")
     require(isinstance(contrast["rationale"], str) and contrast["rationale"].strip(), "contrast rationale required")
@@ -1674,7 +1699,8 @@ def batch(directory):
     timestamp(obj["at"])
     # Every field must still be what the bound report and boundary produce: a budget,
     # policy or evaluator edited into BATCH.json is not a new boundary.
-    changed = drift(obj, frozen_batch(bound(obj["cycle_report"]), bound(obj["boundary"]), directory))
+    with replaying():
+        changed = drift(obj, frozen_batch(bound(obj["cycle_report"]), bound(obj["boundary"]), directory))
     require(not changed, "BATCH.json disagrees with its bound cycle report and boundary: " + ", ".join(changed))
     if obj.get("walkforward_runtime"):
         bound(obj["walkforward_runtime"])
@@ -1703,7 +1729,7 @@ def frozen_batch(report_path, boundary_path, output):
     require(boundary["affects_running_experiments"] is False, "cannot replace a running batch")
     require(bool(boundary["evidence"]), "boundary evidence required")
     for ref in boundary["evidence"]:
-        bound(ref)
+        attested(ref)
     quality_contract(boundary["quality_contract"])
     stage = evaluation_stage(boundary)
     if boundary.get("cost_contract"):
@@ -1853,7 +1879,8 @@ def ledger_all(directory):
         require(all(timestamp(n["available_at"]) <= timestamp(decision["at"]) for n in visible),
                 "decision predates a visible result")
         if group["group"] not in issued:
-            issued[group["group"]] = decision_records(directory, config, visible, bound(decision["context"]))
+            with replaying():
+                issued[group["group"]] = decision_records(directory, config, visible, bound(decision["context"]))
         expected = issued[group["group"]]
         if isinstance(expected, list):
             expected = expected[group["index"] - 1] if group["index"] <= len(expected) else {}
@@ -1871,7 +1898,8 @@ def ledger_all(directory):
         for ref in outcome["evidence"]:
             bound(ref)
         require(timestamp(outcome["at"]) >= timestamp(decision["at"]), "outcome predates its decision")
-        changed = drift(outcome, outcome_record(directory, config, decision, bound(outcome["input"])))
+        with replaying():
+            changed = drift(outcome, outcome_record(directory, config, decision, bound(outcome["input"])))
         require(not changed, outcome_path.name + " disagrees with its bound result: " + ", ".join(changed))
         nodes.append({"id": outcome["node"], "parent": decision["selected"]["anchor"],
                       "depends_on": decision["visible_nodes"], "decision_at": decision["at"],
@@ -1942,7 +1970,7 @@ def decision_records(directory, config, nodes, context_path):
     require(context["branch"] == config["branch"], "context branch mismatch")
     require(context["context_complete"] is True and context["evidence"], "visible context required")
     for ref in context["evidence"]:
-        bound(ref)
+        attested(ref)
     if config.get("evaluation_contract") and config["mode"] != "frontier_pilot":
         require(context.get("question") in stage_contract(config["evaluation_contract"])["questions"],
                 "context needs a boundary-frozen stage question")

@@ -1,0 +1,332 @@
+diff --git "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md" "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
+index 4d72734..ad6d098 100644
+--- "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
++++ "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
+@@ -145,7 +145,7 @@ python -X utf8 -B engine/research_scheduler.py review-pilot --batch <已结束
+ - 生成候选、回放、试点和人工准备的成本分别记账。程序记录本身耗时，但不会把它当成全部进化成本；早期维护用量未知仍明确为 null。
+ - 历史记录不完整的首次两个片段只用于诊断和验收工具。新批次评分合同、时序快照和决策件是逐步获得可比较材料的必需输入。
+ - 程序改版后重新冻结新 cycle；旧批次继续调用原对照目录的 `ENGINE.py`。没有覆盖旧记录的写入选项。
+-- 读取批次时，程序从绑定的 cycle 报告和边界重算 `BATCH.json`，从决策当时的可见结果和上下文重算每个 `D*.json`，从绑定的结果文件重算每个 `O*.json`（时间戳除外）。任何字段对不上即拒绝，并列出不一致的字段；连带改写哈希引用也一样。要改预算、策略或评价，只能冻结新边界、开新批次。整段删除记录或连同边界整套重写不在此检查范围内，需靠研究线自己的版本记录发现。
++- 读取批次时，程序从绑定的 cycle 报告和边界重算 `BATCH.json`，从决策当时的可见结果和上下文重算每个 `D*.json`，从绑定的结果文件重算每个 `O*.json`（时间戳除外）。任何字段对不上即拒绝，并列出不一致的字段；连带改写哈希引用也一样。要改预算、策略或评价，只能冻结新边界、开新批次。整段删除记录或连同边界整套重写不在此检查范围内，需靠研究线自己的版本记录发现。重算只用记录自身的输入（cycle 报告、边界、上下文、结果文件）；它们所附的证据清单（上下文和边界引用的文档、协议、目标文件、候选依据）在写入时核对，之后编辑这些文档不会让在途批次停下，新的决策和结果仍在写入时核对各自引用的证据。
+ - 单批写入使用独占短锁。同一锁存在时检查本批实际写入者，不自动删除别人的锁；无依赖的其他工作继续。
+ - `pending_result`、`reflection_due`、`batch_closed` 是调度批次状态，不是整条研究线的暂停指令。
+ 
+diff --git a/engine/research_scheduler.py b/engine/research_scheduler.py
+index adea8e1..ff716a3 100644
+--- a/engine/research_scheduler.py
++++ b/engine/research_scheduler.py
+@@ -93,6 +93,31 @@ def bound(ref):
+     return path
+ 
+ 
++REPLAY = {"active": False}
++
++
++@contextmanager
++def replaying():
++    """Re-derive stored records from their own inputs without re-checking supporting evidence.
++
++    Context, boundary, protocol, goal and spec evidence is hash-checked when a record is written.
++    It often cites living documents (shared rules, CURRENT_RULES.md); re-checking it on every later
++    read stops a running batch whenever such a document is edited, while saying nothing about
++    whether the stored record still follows from its inputs.
++    """
++    previous = REPLAY["active"]
++    REPLAY["active"] = True
++    try:
++        yield
++    finally:
++        REPLAY["active"] = previous
++
++
++def attested(ref):
++    """Supporting evidence: verified when a record is written, not again while re-deriving it."""
++    return Path(ref["path"]) if REPLAY["active"] else bound(ref)
++
++
+ def drift(stored, expected):
+     """Top-level fields of a stored record that its bound inputs no longer reproduce (time excluded)."""
+     expected = json.loads(json.dumps(expected, ensure_ascii=False, allow_nan=False))
+@@ -137,7 +162,7 @@ def stage_contract(ref):
+         require(criterion["op"] == "eq" or type(expected) is not bool, "ordered boolean criterion")
+         ids.append(criterion["id"])
+     require(len(ids) == len(set(ids)), "duplicate stage criterion")
+-    bound(obj["protocol"])
++    attested(obj["protocol"])
+     return obj
+ 
+ 
+@@ -300,7 +325,7 @@ def quality_contract(ref):
+                 "invalid frozen annual floor")
+     for field in ["annual_path", "drawdown_path", "correctness_path"]:
+         require(isinstance(contract[field], str) and contract[field], "metric field path required")
+-    bound(contract["goal_source"])
++    attested(contract["goal_source"])
+     return contract
+ 
+ 
+@@ -362,7 +387,7 @@ def validate_account_contract(contract):
+     require(sha256_string(account["fees_sha256"]) and sha256_string(account["execution_sha256"]),
+             "freeze fee and execution assumptions")
+     require(sha256_string(contract["baseline_source_sha256"]), "fixed baseline source hash required")
+-    bound(contract["protocol"])
++    attested(contract["protocol"])
+ 
+ 
+ def review_account(contract_ref, evidence_ref):
+@@ -386,7 +411,7 @@ def review_account(contract_ref, evidence_ref):
+         refs = account.get("verification_refs")
+         require(isinstance(refs, list) and refs, name + ": original independent review required")
+         for ref in refs:
+-            bound(ref)
++            attested(ref)
+         for key in ["net_return", "net_profit"]:
+             require(account.get(key) is not None and score_number(account[key]), name + ": missing net result")
+         require(account["net_return"] >= -1 and number(account.get("max_drawdown")) and
+@@ -569,7 +594,7 @@ def validate_frontier(frontier, branch):
+             "frontier scope mismatch")
+     require(bool(frontier["generation_evidence"]), "candidate generation evidence required")
+     for ref in frontier["generation_evidence"]:
+-        bound(ref)
++        attested(ref)
+     candidates = frontier["candidates"]
+     require(isinstance(candidates, list) and candidates, "empty candidate frontier")
+     seen = set()
+@@ -603,7 +628,7 @@ def validate_frontier(frontier, branch):
+             require(bool(spec.get(field)), "candidate spec missing " + field)
+         require(bool(spec["source_evidence"]), "candidate evidence required")
+         for ref in spec["source_evidence"]:
+-            bound(ref)
++            attested(ref)
+     require(len(active) <= 8, "keep at most eight active hypotheses; preserve others as deferred")
+     shortfall = len(active) < 6 or len(set(active.values())) < 3
+     if shortfall:
+@@ -635,13 +660,13 @@ def frontier_selector(config):
+     contract = read(bound(pilot["selection_contract"]))
+     require(contract["schema"] == "research_frontier_selector.v1" and contract["rule"] == rule and
+             contract["branch"] == config["branch"], "selector contract scope mismatch")
+-    bound(contract["plan"])
++    attested(contract["plan"])
+     bottleneck = contract["bottleneck"]
+     require(all(isinstance(bottleneck.get(k), str) and bottleneck[k].strip() for k in ("id", "statement")),
+             "selector needs an explicit economic bottleneck")
+     require(bool(bottleneck["evidence"]), "bottleneck evidence required")
+     for ref in bottleneck["evidence"]:
+-        bound(ref)
++        attested(ref)
+     require(contract["cost_basis"] == "spec_budget_resource_seconds", "unsupported estimated cost basis")
+     return contract
+ 
+@@ -657,7 +682,7 @@ def selection_basis(candidate, contract):
+     require(isinstance(basis["rationale"], str) and basis["rationale"].strip(), "selection rationale required")
+     require(bool(basis["evidence"]), "selection evidence required")
+     for ref in basis["evidence"]:
+-        bound(ref)
++        attested(ref)
+     contrast = basis["discrimination"]
+     require(contrast["level"] in {"separates", "constrains", "none"}, "invalid discrimination level")
+     require(isinstance(contrast["rationale"], str) and contrast["rationale"].strip(), "contrast rationale required")
+@@ -1674,7 +1699,8 @@ def batch(directory):
+     timestamp(obj["at"])
+     # Every field must still be what the bound report and boundary produce: a budget,
+     # policy or evaluator edited into BATCH.json is not a new boundary.
+-    changed = drift(obj, frozen_batch(bound(obj["cycle_report"]), bound(obj["boundary"]), directory))
++    with replaying():
++        changed = drift(obj, frozen_batch(bound(obj["cycle_report"]), bound(obj["boundary"]), directory))
+     require(not changed, "BATCH.json disagrees with its bound cycle report and boundary: " + ", ".join(changed))
+     if obj.get("walkforward_runtime"):
+         bound(obj["walkforward_runtime"])
+@@ -1703,7 +1729,7 @@ def frozen_batch(report_path, boundary_path, output):
+     require(boundary["affects_running_experiments"] is False, "cannot replace a running batch")
+     require(bool(boundary["evidence"]), "boundary evidence required")
+     for ref in boundary["evidence"]:
+-        bound(ref)
++        attested(ref)
+     quality_contract(boundary["quality_contract"])
+     stage = evaluation_stage(boundary)
+     if boundary.get("cost_contract"):
+@@ -1853,7 +1879,8 @@ def ledger_all(directory):
+         require(all(timestamp(n["available_at"]) <= timestamp(decision["at"]) for n in visible),
+                 "decision predates a visible result")
+         if group["group"] not in issued:
+-            issued[group["group"]] = decision_records(directory, config, visible, bound(decision["context"]))
++            with replaying():
++                issued[group["group"]] = decision_records(directory, config, visible, bound(decision["context"]))
+         expected = issued[group["group"]]
+         if isinstance(expected, list):
+             expected = expected[group["index"] - 1] if group["index"] <= len(expected) else {}
+@@ -1871,7 +1898,8 @@ def ledger_all(directory):
+         for ref in outcome["evidence"]:
+             bound(ref)
+         require(timestamp(outcome["at"]) >= timestamp(decision["at"]), "outcome predates its decision")
+-        changed = drift(outcome, outcome_record(directory, config, decision, bound(outcome["input"])))
++        with replaying():
++            changed = drift(outcome, outcome_record(directory, config, decision, bound(outcome["input"])))
+         require(not changed, outcome_path.name + " disagrees with its bound result: " + ", ".join(changed))
+         nodes.append({"id": outcome["node"], "parent": decision["selected"]["anchor"],
+                       "depends_on": decision["visible_nodes"], "decision_at": decision["at"],
+@@ -1942,7 +1970,7 @@ def decision_records(directory, config, nodes, context_path):
+     require(context["branch"] == config["branch"], "context branch mismatch")
+     require(context["context_complete"] is True and context["evidence"], "visible context required")
+     for ref in context["evidence"]:
+-        bound(ref)
++        attested(ref)
+     if config.get("evaluation_contract") and config["mode"] != "frontier_pilot":
+         require(context.get("question") in stage_contract(config["evaluation_contract"])["questions"],
+                 "context needs a boundary-frozen stage question")
+diff --git a/tests/test_replay_and_history.py b/tests/test_replay_and_history.py
+new file mode 100644
+index 0000000..a3df94d
+--- /dev/null
++++ b/tests/test_replay_and_history.py
+@@ -0,0 +1,150 @@
++"""Regressions from the 1.3.0 review (2026-10-17).
++
++1. Re-deriving a stored BATCH/D/O must not re-check the evidence lists it cited when it was written.
++   Decision contexts cite living documents (39 of 2,804 real contexts cite shared rule docs or
++   CURRENT_RULES.md, and each harness release edits those docs); re-checking them on every read
++   stopped a running batch at the next doc edit. Tampering with the records is still rejected.
++2. A new harness round must be able to learn from a pilot round's REVIEW: the pilot re-runs the
++   development winner, whose proposal belongs to the round that offered the pilot.
++
++Scheduler tests use only v1 features, so they run on 1.3.0 and on the harness-v2 branch alike.
++The harness test reuses the original fixtures and is skipped without tests/test_research_frontier.py.
++Run from the project root:  python -X utf8 -B -m unittest discover -s tests -p "test_replay_and_history.py" -v
++"""
++import importlib.util
++import json
++from pathlib import Path
++import tempfile
++import unittest
++
++ENGINE = Path(__file__).resolve().parent.parent / "engine"
++spec = importlib.util.spec_from_file_location("research_scheduler", ENGINE / "research_scheduler.py")
++s = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(s)
++
++try:
++    import test_research_harness as original
++except ImportError:  # test_research_frontier.py is not in every checkout
++    original = None
++
++
++class ReplayEvidenceTests(unittest.TestCase):
++    def setUp(self):
++        self._tmp = tempfile.TemporaryDirectory()
++        self.root = Path(self._tmp.name)
++        self.serial = 0
++        self.doc = self.root / "研究调度运行手册.md"
++        self.doc.write_text("shared runbook, release 1\n", encoding="utf-8")
++        self.goal_doc = self.root / "当前研究目标.md"
++        self.goal_doc.write_text("goal, release 1\n", encoding="utf-8")
++
++    def tearDown(self):
++        self._tmp.cleanup()
++
++    def save(self, name, value):
++        self.serial += 1
++        path = self.root / f"{self.serial:04d}-{name}.json"
++        s.write(path, value)
++        return s.reference(path)
++
++    def text(self, name, body):
++        path = self.root / name
++        path.write_text(body, encoding="utf-8")
++        return s.reference(path)
++
++    def start(self):
++        evidence = self.text("n1.txt", "n1")
++        node = {"id": "n1", "parent": "root", "depends_on": [], "decision_at": "2026-10-01T00:00:00+00:00",
++                "available_at": "2026-10-01T01:00:00+00:00",
++                "observation": {"status": "verified_information", "quality": None, "question": "q",
++                                "resolved": True, "substantive": True},
++                "measured_seconds": 1.0, "total_seconds": 2.0, "evidence": [evidence]}
++        s.write(self.root / "world.json", {"schema": s.SCHEMA, "id": "w", "branch": "structure",
++                                          "admission": "diagnostic", "usage": "development", "limitations": [],
++                                          "initial_quality": 0.5, "metric_contract": "t", "nodes": [node]})
++        s.cycle([str(self.root / "world.json")], None, self.root / "cycle", "structure")
++        quality = self.save("quality", {"schema": "research_quality.v1", "kind": "risk_cap_return_v1",
++                                        "drawdown_ceiling": 0.2, "annual_path": "annual", "drawdown_path": "mdd",
++                                        "correctness_path": "ok", "goal_source": s.reference(self.goal_doc)})
++        boundary = self.save("boundary", {"branch": "structure", "status": "first_scheduler_batch",
++                                          "affects_running_experiments": False,
++                                          "evidence": [s.reference(self.doc)], "quality_contract": quality})
++        self.batch = self.root / "batch"
++        s.start_batch(self.root / "cycle" / "REPORT.json", boundary["path"], self.batch)
++
++    def context(self):
++        return self.save("context", {"branch": "structure", "context_complete": True,
++                                     "evidence": [s.reference(self.doc), s.reference(self.goal_doc)]})
++
++    def observe(self, decision_id, status="verified_information"):
++        result = {"branch": "structure", "decision_id": decision_id, "decision_followed": True,
++                  "observation": {"status": status, "quality": None, "question": "q-" + decision_id,
++                                  "resolved": True, "substantive": True},
++                  "measured_seconds": 1.0, "total_seconds": 2.0,
++                  "evidence": [self.text(decision_id + ".txt", decision_id)]}
++        if status in {"valid_improvement", "valid_negative"}:
++            result["grade_evidence"] = self.save("grade", {"annual": 0.1, "mdd": 0.15, "ok": True})
++        return s.observe(self.batch, self.save("result", result)["path"])
++
++    def test_editing_a_doc_cited_by_an_earlier_context_keeps_the_batch_running(self):
++        self.start()
++        first = s.next_decision(self.batch, self.context()["path"])
++        self.observe(first["id"])
++        self.doc.write_text("shared runbook, release 2\n", encoding="utf-8")
++        self.assertEqual(s.next_decision(self.batch, self.context()["path"])["id"], "D0002")
++
++    def test_editing_the_goal_doc_after_an_economic_outcome_keeps_the_batch_running(self):
++        self.start()
++        first = s.next_decision(self.batch, self.context()["path"])
++        self.observe(first["id"], status="valid_negative")
++        self.goal_doc.write_text("goal, release 2\n", encoding="utf-8")
++        self.assertEqual(s.next_decision(self.batch, self.context()["path"])["selected"],
++                         {"anchor": "root", "action": "explore"})
++
++    def test_a_new_decision_still_checks_its_own_context_evidence(self):
++        self.start()
++        stale = self.context()
++        self.doc.write_text("shared runbook, release 2\n", encoding="utf-8")
++        with self.assertRaisesRegex(ValueError, "evidence changed"):
++            s.next_decision(self.batch, stale["path"])
++        self.assertFalse((self.batch / "D0001.json").exists())
++        self.assertFalse(s.REPLAY["active"])
++
++    def test_edited_records_are_still_rejected_after_a_doc_edit(self):
++        self.start()
++        first = s.next_decision(self.batch, self.context()["path"])
++        self.observe(first["id"], status="valid_negative")
++        self.doc.write_text("shared runbook, release 2\n", encoding="utf-8")
++        outcome = self.batch / "O0001.json"
++        stored = json.loads(outcome.read_text(encoding="utf-8"))
++        stored["observation"]["status"] = "valid_improvement"
++        outcome.write_text(json.dumps(stored, indent=2) + "\n", encoding="utf-8")
++        with self.assertRaisesRegex(ValueError, "O0001.json disagrees"):
++            s.next_decision(self.batch, self.context()["path"])
++        self.assertFalse(s.REPLAY["active"])
++
++
++if original is not None:
++    Fixture = type("Fixture", (unittest.TestCase,),
++                   {k: v for k, v in vars(original.HarnessTests).items() if not k.startswith("test")})
++else:
++    Fixture = unittest.TestCase
++
++
++@unittest.skipIf(original is None, "needs tests/test_research_frontier.py from the project")
++class PilotHistoryTests(Fixture):
++    def test_new_round_can_learn_from_a_pilot_review(self):
++        directory, candidate, _ = self.compared()
++        entry = self.make_case("pilot-new")
++        pilot = self.start_round(kind="prospective_pilot", pilot_offer=s.reference(directory / "REVIEW.json"), cases=[entry])
++        self.attempt(pilot, self.base, entry, checks=(True, False))
++        self.attempt(pilot, candidate, entry)
++        self.assertEqual(self.call(pilot, "review")["decision"], "supported_in_bounded_pilot")
++        follow = self.start_round(incumbent=candidate, previous_review=s.reference(pilot / "REVIEW.json"))
++        task = s.read(follow / "REFLECTION_TASK.json")
++        self.assertEqual(task["lineage"][-1]["kind"], "prospective_pilot")
++        self.assertEqual(task["lineage"][-1]["candidates"][0]["bundle"], candidate)
++
++
++if __name__ == "__main__":
++    unittest.main()
