@@ -1,0 +1,10 @@
+{
+  "tests": 28,
+  "failures": 0,
+  "errors": 0,
+  "modules": [
+    "test_harness",
+    "test_harness_replay",
+    "test_harness_version_view"
+  ]
+}

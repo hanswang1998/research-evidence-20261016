@@ -1,0 +1,91 @@
+{
+  "schema": "harness_release_verification.v1",
+  "regression": {
+    "tests": 223,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 139.08,
+    "modules": [
+      "test_research_scheduler",
+      "test_research_rrsi",
+      "test_research_rrsi_p0",
+      "test_research_rrsi_p1",
+      "test_research_frontier",
+      "test_research_harness",
+      "test_research_guidance",
+      "test_harness_versions",
+      "test_harness_tools",
+      "test_scheduler_integrity",
+      "test_harness_v2_merge"
+    ]
+  },
+  "dashboard": {
+    "tests": 28,
+    "failures": 0,
+    "errors": 0,
+    "modules": [
+      "test_harness",
+      "test_harness_replay",
+      "test_harness_version_view"
+    ]
+  },
+  "unique_test_count": 251,
+  "ui": {
+    "diagramGeometryUnchanged": true,
+    "nodes": 24,
+    "svgConnectors": 13,
+    "maxRelativePixelDelta": 4.57763671875e-05,
+    "viewportCenteringNote": "Page reload loaded unrelated concurrent navigation updates; node-relative geometry and all connector markup remain unchanged.",
+    "rightWidthUnchanged": true,
+    "newReflectionVisible": true,
+    "strictChecksVisible": true,
+    "recomputationVisible": true,
+    "versionTextVisible": true,
+    "statusNotPromoted": true,
+    "snapshot": "ui-h1-reflection.png"
+  },
+  "unchanged_protected_files": 89,
+  "concurrent_unrelated_changes_preserved": {
+    "output/rsi_bi_dashboard/project_runtime.py": {
+      "before": "140ded66e556d5a8f958b2bbb59878a29c5a3ac89382b4daf5d7c81c1ef89d84",
+      "observed": "34457af03f412981bb35b7f7a399faa254cd8857f40956e9175f9d5af6519117",
+      "written_by_this_task": false
+    },
+    "output/rsi_bi_dashboard/projects.js": {
+      "before": "c1618f7ebe6b7600b8b7d98c5498bb2f41a72d4d9c9806d48f75a726fc0ed274",
+      "observed": "c1173efc1ac2994cb9fe866dbe3fe4ed66ef6dd00b743472d95484e79afb7d07",
+      "written_by_this_task": false
+    },
+    "output/rsi_bi_dashboard/projects.py": {
+      "before": "67b76a3e60552d500ad4a83eeb49ca04a455d7a3b6bf5406180f4eb1e2572b68",
+      "observed": "c445c84d40f74ef0db0673ef0ed3abbd40ce93fb616becfe5d3459fcd86f88a3",
+      "written_by_this_task": false
+    },
+    "output/rsi_bi_dashboard/test_project_workflow.py": {
+      "before": "fc3aabaeb93f3e67752999024d64ebfc5f7a76a1ee7fe415474efe992e89ba42",
+      "observed": "c10f797d4050d9495cc4bc59f880bacce597f384737d45a8c1e5fd3f966fdcad",
+      "written_by_this_task": false
+    },
+    "output/rsi_bi_dashboard/test_projects.py": {
+      "before": "f97bbe99bef9f3bd500624c209d7046d44093cfd6daaef9099a9683c74704bab",
+      "observed": "a6fcf616bf7d804bd2a61bbe10deff3850a483eb5840de9f964427974a5cda83",
+      "written_by_this_task": false
+    },
+    "output/rsi_bi_dashboard/index.html": {
+      "before": "40ce0288f9d68ec9e0821425b20049b52eb7ad9f495b28efd6743a9d7576fcb1",
+      "observed": "febceda8312b6e76c384a0e8c819fd637d85e224fde0ccd3963b064c75ffc6f6",
+      "written_by_this_task": false
+    }
+  },
+  "working_content_sha256": "62189088b9fbfef1214081705c5fa52927bca2fe5da4b003fe3fb16fbb6c12a9",
+  "managed_changes": [
+    "docs/Harness反思与改进.md",
+    "docs/研究调度运行手册.md",
+    "engine/research_harness.py",
+    "engine/research_harness_default.json",
+    "engine/research_scheduler.py"
+  ],
+  "line_targets_changed": false,
+  "ready_to_record": true
+}

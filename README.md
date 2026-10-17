@@ -1,5 +1,7 @@
 # 研究材料证据包 · 2026-10-16
 
+> **Harness 1.3.0 审查：** 请从 [harness-1.3.0/README.md](harness-1.3.0/README.md) 开始。该目录包含本地登记的 32 份原件、原始 ZIP 与哈希；此前的 `harness-v2/` 是上游提案目录。
+
 本仓库保存按 P0／P1／P2 十项需求整理的研究材料。完整材料以 Release 附件提供，下载 ZIP 和同名 `.sha256` 文件后解压；从包内 `README.md`、`ANSWERS.md` 和 `DATA_DICTIONARY.md` 开始审阅。
 
 ## 下载文件

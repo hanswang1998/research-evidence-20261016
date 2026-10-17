@@ -1,0 +1,46 @@
+{
+  "schema": "harness_version_scope.v1",
+  "scope": "项目共用 Harness 的入口、规则与程序；各线私有执行器、策略、研究状态、数据、看板展示和外部 Skill 不在此版本内。",
+  "components": {
+    "入口": [
+      "AGENTS.md",
+      "CLAUDE.md"
+    ],
+    "研究规则": [
+      "docs/harness/目标与评价.md",
+      "docs/harness/研判与选题.md",
+      "docs/harness/读取与使用观测.md",
+      "docs/当前研究目标.md",
+      "docs/研究验收标准.md",
+      "docs/研究能力改进规范.md",
+      "docs/总目标与持续迭代.md",
+      "docs/研究调度提示词.md",
+      "docs/研究调度运行手册.md",
+      "docs/分支研究试点.md",
+      "docs/Harness反思与改进.md",
+      "docs/研究方法督导机制.md",
+      "docs/研究总控监测协议.md",
+      "docs/研究产物治理.md",
+      "docs/主策略机器学习计算指引.md",
+      "docs/高涨幅计算指引.md",
+      "docs/harness/可选诊断工具.md"
+    ],
+    "共用程序": [
+      "engine/research_control.py",
+      "engine/research_scheduler.py",
+      "engine/research_harness.py",
+      "engine/research_harness_default.json",
+      "engine/research_guidance.py",
+      "engine/research_line_digest.py",
+      "engine/research_timing.py",
+      "engine/research_outcomes.py",
+      "engine/research_walkforward.py",
+      "engine/research_online_ab.py"
+    ],
+    "版本管理": [
+      "engine/harness_versions.py",
+      "engine/harness_version_scope.json",
+      "docs/harness/版本管理.md"
+    ]
+  }
+}

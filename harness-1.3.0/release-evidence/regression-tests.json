@@ -1,0 +1,20 @@
+{
+  "tests": 223,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "seconds": 139.08,
+  "modules": [
+    "test_research_scheduler",
+    "test_research_rrsi",
+    "test_research_rrsi_p0",
+    "test_research_rrsi_p1",
+    "test_research_frontier",
+    "test_research_harness",
+    "test_research_guidance",
+    "test_harness_versions",
+    "test_harness_tools",
+    "test_scheduler_integrity",
+    "test_harness_v2_merge"
+  ]
+}

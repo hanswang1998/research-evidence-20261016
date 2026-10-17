@@ -1,0 +1,23 @@
+{
+  "version": "1.3.0",
+  "type": "minor",
+  "content_sha256": "62189088b9fbfef1214081705c5fa52927bca2fe5da4b003fe3fb16fbb6c12a9",
+  "archive": {
+    "path": "C:\\Users\\Administrator\\Desktop\\聚宽回测纯净版\\docs\\harness\\versions\\v1.3.0.zip",
+    "sha256": "51a6c2d4f34b9f00abd8c4fdd1132334fe1cff89ed95c70c9ff524b10cffe937",
+    "bytes": 223721
+  },
+  "restored_files": 32,
+  "restore_byte_match": true,
+  "tests_passed": 251,
+  "working_state": "matches_recorded",
+  "line_adoption": "not_changed",
+  "line_targets_changed": false,
+  "economic_promotion": false,
+  "task_artifact_usage": {
+    "files": 119,
+    "logical_bytes": 2807171,
+    "scope": "bounded integration evidence before this final release receipt; tests clean temporary fixtures",
+    "storage_released": 0
+  }
+}
