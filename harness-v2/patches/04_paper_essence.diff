@@ -1,0 +1,784 @@
+diff --git "a/docs/Harness\345\217\215\346\200\235\344\270\216\346\224\271\350\277\233.md" "b/docs/Harness\345\217\215\346\200\235\344\270\216\346\224\271\350\277\233.md"
+index 75b3e2f..7598fdf 100644
+--- "a/docs/Harness\345\217\215\346\200\235\344\270\216\346\224\271\350\277\233.md"
++++ "b/docs/Harness\345\217\215\346\200\235\344\270\216\346\224\271\350\277\233.md"
+@@ -2,6 +2,8 @@
+ 
+ **2026-10-17 v2 可选规则（计划中写 `decision_rule` 才生效；不写则完全按下文 v1 规则，旧轮次、旧 REVIEW 与旧哈希不变）。** 依据 2026-10-16 证据包：1,277 份方法报告、2,554 个候选、0 次换版；harness 本身尚未有真实轮次。声明 `decision_rule: {rule: paired_sign_wilson_v1}` 后：①配对比较改为按案例计胜负的符号检验，Wilson 下界须大于 1/2，开发轮至少 16 个配对案例（试点 8 个），只对事前声明的关键判据保留一票否决；②每轮候选上限 2→4、案例上限 12→60；③候选版本包新写入证券代码或具体日期即拒绝；④复核者模型家族与生成者是否相同会被记录（`critic_independence`），**不阻止**；⑤成本未知不阻止开发轮获得试点资格，但任何已测得的单次成本超出冻结预算即拒绝，前瞻试点必须成本完整才能判为支持，并用 [计时工具](harness/v2运行说明.md#计时) 实测。理由与证据见 harness-v2/CHANGES.md。
+ 
++**2026-10-17 吸收的论文做法（理由见 harness-v2/CHANGES.md）。** 不改判定、默认就有的三项：REVIEW 记录每个案例中各版本通过与未通过的判据（`case_matrix`）；下一轮 REFLECTION_TASK 附上历次候选的完整谱系（`lineage`，含提案、版本包、改动组件、测得效果、拒绝原因和体积变化；Meta-Harness 发现摘要会丢掉诊断细节）、同一案例一通过一失败的对照和跨案例反复失败的判据（`contrast`，Harness² 与 ModularRSI 的对比诊断），以及最近三轮改动都没测得收益的组件（`prune_hints`，RRSI 的剪枝；只是提示）。只在 v2 `decision_rule` 下生效的三项：①比父本严格更短的版本包（`bundle_size`：两段提示词、生成问题与单项上下文预算的字符数）不必证明增益，只需逐案例比较的负案例占比 Wilson 上界不超过 `max_simplification_loss_share`（默认 0.2：16 个案例须零负，30 个案例最多 2 负），且无关键判据退化；②多个候选同等时优先更短的版本包；③独立复核多两项判断：`task_agnostic`（不写具体案例、证券、数值或答案）与 `no_inert_addition`（新增文字都会改变行为），并允许预测 `{metric: bundle_size, direction: decrease}`。
++
+ 2026-10-15，接口 `research_harness.v1`。这是结构／旧 ML 调度的可选维护入口；接入其他线须适配本线消费者，不能仅凭这份文档宣称接通。
+ 
+ 当前 Agent 根据证据修改版本包，Python 组装实际任务、校验生成物、比较结果并冻结下一批绑定。原 `next → observe → review-pilot → export` 继续执行。代码不另启模型、不付费调用、不提交实验、不恢复任何研究线，也不改已有冻结 ENGINE、PLAN、SPEC、批次或经济评分器。
+@@ -109,7 +111,7 @@ python -X utf8 -B '本轮目录/ENGINE.py' harness --round '本轮目录' --requ
+ 
+ 提案 `research_harness_proposal.v1` 绑定 `parent`、`reflection_task`、`evidence`、`bundle`、`component`，并写非空 `diagnosis / alternative_explanation / preserve / stop_rule`。`expected_effect` 当前支持 `{metric: passed_checks, direction: increase}` 或 `{metric: total_seconds, direction: decrease}`，用来核对预测而非自报成功。
+ 
+-独立复核 `research_harness_critic.v1`（或 v2，多一个 `verifier_model` 字段）绑定 `proposal`、本轮 `contract`、非空 `evidence`、`verifier` 和 `independent=true`；`checks` 恰为四个布尔项：`evidence_grounded / bounded_change / preserves_success / testable_prediction`。须实际复核，不用程序自动填四个 true。v2 规则下写了 `verifier_model` 时，程序记录它与 `agent_model` 是否同一模型家族（`critic_independence`），供解读时参考，不阻止提案：2026-10-16 核查的 ML3 12 个审查会话都是生成者同一模型，角色分离不等于独立，是否强制异模型复核另行决定。复核者先独立形成判断，再读提案者理由。
++独立复核 `research_harness_critic.v1`（或 v2，多一个 `verifier_model` 字段）绑定 `proposal`、本轮 `contract`、非空 `evidence`、`verifier` 和 `independent=true`；`checks` 恰为四个布尔项：`evidence_grounded / bounded_change / preserves_success / testable_prediction`；v2 规则下为六项，另加 `task_agnostic / no_inert_addition`。须实际复核，不用程序自动填四个 true。v2 规则下写了 `verifier_model` 时，程序记录它与 `agent_model` 是否同一模型家族（`critic_independence`），供解读时参考，不阻止提案：2026-10-16 核查的 ML3 12 个审查会话都是生成者同一模型，角色分离不等于独立，是否强制异模型复核另行决定。复核者先独立形成判断，再读提案者理由。
+ 
+ Agent 读完 TASK 后使用其反思、生成和上下文要求，输出原 `research_frontier.v1` 与 SPEC。FRONTIER 的 `generation_evidence` 必须含 TASK 引用，仍执行原来源、身份、依赖、短缺说明等校验；新选择器还须满足其原 SPEC 格式。再保存 `research_harness_response.v1`：
+ 
+@@ -134,7 +136,8 @@ Agent 读完 TASK 后使用其反思、生成和上下文要求，输出原 `res
+ - 每个案例比较双方通过的冻结判据个数：候选多为胜、少为负、相等为平。候选该案例失败或未知**记负**；父本失败或未知该案例不配对，未配对超过 `max_unpaired_share` 时不能关轮比较。
+ - 胜率（胜／(胜+负)）的 Wilson 下界须大于 1/2。按 0.9 置信，16 个决出胜负的案例至少 12 胜；3 胜 0 负也只是勉强过线。`critical_checks` 中任一判据在任一案例从通过变为不通过，直接拒绝。
+ - 任何一次已测得的成本超出冻结预算即拒绝，不论其他成本是否已知。双方成本都已测全时，候选总成本不得超过父本 ×(1+`cost_tolerance`)；无负案例且成本严格下降也可算优势。开发轮成本未测全时记 `cost_known=false`，不阻止试点资格，但不能宣称节时；前瞻试点成本未测全则不能判为支持，须用计时工具实测。
+-- 多个候选都通过时，按 Wilson 下界高者、已知成本低者、内容哈希依次选取，不依赖注册／完成顺序。失败、未知、被拒绝版本和预测命中／落空均保留。
++- 比父本严格更短的候选可按非劣通过：负案例占比的 Wilson 上界不超过 `max_simplification_loss_share`，且无关键判据退化；这让删减与增加同等竞争，不必证明增益。
++- 多个候选都通过时，按 Wilson 下界高者、已知成本低者、版本包更短者、内容哈希依次选取，不依赖注册／完成顺序。失败、未知、被拒绝版本和预测命中／落空均保留。
+ 
+ v1 的“每个案例中的每项判据不得退化”在每案例只生成一次的情况下会因为随机波动拒掉真实改进，同时又分不清运气和改进；v1 还要求成本完整，而当时 1,277 份方法报告全部有成本字段为空。
+ 
+diff --git "a/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md" "b/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md"
+index 58c4bce..9e648a7 100644
+--- "a/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md"
++++ "b/docs/harness/v2\350\277\220\350\241\214\350\257\264\346\230\216.md"
+@@ -56,5 +56,11 @@ python -X utf8 -B engine/research_outcomes.py ledger --csv <台账CSV> --show-un
+ `engine/research_online_ab.py` 比较两组已关闭批次（旧版与新版交替运行）。每组至少 30 个观察；主指标为改进率，观察带滚动验证裁决时为“账户评分改进且滚动验证通过”的比例（只有滚动验证通过、账户却是负结果的不算成功），次指标为未出结论率。区间为 Newcombe 区间。结论只说明开发期研究效率，不是独立经济确认。
+ 
+ ```powershell
+-python -X utf8 -B engine/research_online_ab.py --incumbent <旧版批次目录...> --candidate <新版批次目录...> --out <报告>
++python -X utf8 -B engine/research_online_ab.py --incumbent <旧版批次目录...> --candidate <新版批次目录...> --control <旧版加同等额外预算的批次目录...> --candidate-overhead <产生新版的 REVIEW.json 或 REPORT.json> --out <报告>
+ ```
++
++`--control` 是按 Rethinking Harness Evolution 加的对照组：旧版加上与新版相同的额外预算（多采样或多重试）。报告的 `budget_matched_control` 说明新版是否胜过它；没跑这一组时写 `not_run`，提醒增益可能只是多花了预算。报告还给出各组每次成功的资源秒数，新版计入产生它的开销（harness REVIEW 的 `whole_round_cost`，或 cycle REPORT 的 `all_in_evolution_cost_seconds`），未测得时为空。对照组只报告，不阻止结论。
++
++## Harness 反思输入
++
++每轮 REFLECTION_TASK 现在附带 `lineage`（历次候选的提案、版本包、测得效果、拒绝原因和体积变化）、`contrast`（同一案例一通过一失败的两份结果，以及跨案例反复失败的判据）和 `prune_hints`（最近三轮改动都没测得收益的组件）。先看反复失败的判据和对照，再决定改什么；`prune_hints` 列出的组件优先考虑删减。v2 规则下，更短的版本包只要不劣即可通过，详见 [Harness 反思与改进](../Harness反思与改进.md)。
+diff --git "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\346\217\220\347\244\272\350\257\215.md" "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\346\217\220\347\244\272\350\257\215.md"
+index 9509092..a7fd758 100644
+--- "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\346\217\220\347\244\272\350\257\215.md"
++++ "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\346\217\220\347\244\272\350\257\215.md"
+@@ -145,7 +145,7 @@ Agent 读取 `REFLECTION_TASK.json`，说明原判断、反例、竞争解释、
+ 
+ 1. **决定看滚动验证段，不看同一开发窗口上的再次领先。** 约 1,100 个账户候选在同一 2020—2025 窗口上反复比较：结构线中位年化 275%（最高 336%），ML3 中位 299%，固定基线 316%。唯一样本外的 ML2 2026-01-05—09-30 原生账户中，E1002J 年化 57.6%（开发期 306%），H543 91.2%（开发期 294%）。在产生父本的同一窗口上继续追高，主要是在挑噪声。新经济候选在边界冻结 `walkforward_contract`（默认：完整可见 2020—2022；2023、2024、2025 各为一个验证折，至少 2 折胜出、平均差不小于 0、各折回撤不超过 20%），由控制器在核账后运行 [research_walkforward.py](../engine/research_walkforward.py)。Agent 只读遮蔽版结论（每折通过与否和粗略区间），完整数字存放在 Agent 不读取的位置；这是约定，不是技术隔离。冻结了该合同的批次中，`valid_improvement` 必须同时满足原账户评分和滚动验证通过，否则按 `valid_negative` 登记，`observe` 会强制检查。
+ 2. **这仍是开发证据。** 2023—2025 已被大量查看过，现有父本在这些年份上的通过只是弱证据；遮蔽的作用是减缓新候选继续过拟合。独立确认仍按[验收标准](研究验收标准.md)使用未参与选择的数据，2026 保持封存。结构线与旧 ML 在 2026-10-04 前约 214 个账户的评估窗口为 2020-01-02—2026-07-24，2026-10-14 还有一次误读 2026 公司行动记录，这两条线谱系的 2026 并不完全干净，确认时须披露。
+-3. **方法比较优先用真实交替批次。** 新旧调度规则或 harness 版本在相邻批次交替使用，各积累至少 30 个观察后运行 [research_online_ab.py](../engine/research_online_ab.py)：主指标为滚动验证通过的改进率（有验证结论时）或改进率，次指标为未出结论率（工程失败 + 证据缺口）。离线回放只作初筛。
++3. **方法比较优先用真实交替批次。** 新旧调度规则或 harness 版本在相邻批次交替使用，各积累至少 30 个观察后运行 [research_online_ab.py](../engine/research_online_ab.py)：主指标为滚动验证通过的改进率（有验证结论时）或改进率，次指标为未出结论率（工程失败 + 证据缺口）。离线回放只作初筛。同时尽量跑一组“旧版加同等额外预算”（多采样或多重试）的对照（`--control`），并用 `--candidate-overhead` 计入产生新版的成本：预算对齐后，自动进化常常胜不过简单重试。
+ 4. **成本由程序计时，不靠事后手填。** 执行器命令用 `research_timing.py run` 包裹，Agent 的生成、复核、沟通阶段用 `start/stop` 记时，每个决策用 `receipt` 组装五阶段成本回执。v1 台账 4,137 行中只有 139 行有计算结束时间。
+ 5. **每批先读本线状态摘要。** 用 [research_line_digest.py](../engine/research_line_digest.py) 生成；只在摘要指向的原件上补读，不重读全量历史。ML3 每批 33—48 分钟，64—76% 的工具调用在读文件，账户计算本身约 1.5 分钟；STATE.json 约 39 万字节，摘要约 1.5 万字符。
+ 6. **结果统一分类。** 新记录在原状态字段之外写 `outcome`，取值为 [research_outcomes.py](../engine/research_outcomes.py) 的八类之一；原始描述保留。没有统一类别，就无法比较两个版本的命中率。
+diff --git "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md" "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
+index 417a23f..4d72734 100644
+--- "a/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
++++ "b/docs/\347\240\224\347\251\266\350\260\203\345\272\246\350\277\220\350\241\214\346\211\213\345\206\214.md"
+@@ -408,6 +408,7 @@ python -X utf8 -B engine/research_online_ab.py --incumbent <旧版批次目录..
+ ```powershell
+ python -X utf8 -B -m unittest discover -s tests -p "test_harness_v2_*.py" -v
+ python -X utf8 -B -m unittest discover -s tests -p "test_scheduler_integrity.py" -v
++python -X utf8 -B -m unittest discover -s tests -p "test_harness_paper_essence.py" -v
+ python -X utf8 -B -m unittest discover -s tests -p "test_research_*.py" -v
+ ```
+ 
+diff --git a/engine/research_harness.py b/engine/research_harness.py
+index ea0335f..73254c5 100644
+--- a/engine/research_harness.py
++++ b/engine/research_harness.py
+@@ -6,11 +6,17 @@ It never calls a model, executes candidate Python, or submits an experiment.
+ Each new round freezes this module, its scheduler and its guidance reader.
+ Previously frozen ENGINE.py files and their original runtimes stand alone.
+ 
+-v2 (2026-10-16): paired comparison is a sign test over cases with a Wilson
+-lower bound instead of "no single check may regress"; development rounds need
+-at least 16 cases; candidate bundles that write security codes or calendar
+-dates are rejected before evaluation; the independent critic must come from a
+-different model family than the generating Agent.
++v2 (2026-10-16, opt-in via decision_rule): paired comparison is a sign test over
++cases with a Wilson lower bound instead of "no single check may regress";
++development rounds need at least 16 cases; candidate bundles that write security
++codes or calendar dates are rejected before evaluation; whether the critic shares
++the generating Agent's model family is recorded, never enforced.
++
++2026-10-17, from the RSI papers: every reflection task carries the full candidate
++lineage (Meta-Harness), a passing/failing contrast per case (Harness², ModularRSI)
++and removal hints for components whose edits never gained (RRSI pruner). Under the
++v2 rule a strictly smaller bundle may pass on non-inferiority, ties prefer the
++smaller bundle, and the critic also judges task specificity and inert additions.
+ """
+ import math
+ from pathlib import Path
+@@ -21,7 +27,15 @@ SCHEMA = "research_harness.v1"
+ SECTIONS = ("goal", "evidence", "failures", "successes", "unknowns")
+ COMPONENTS = ("prompts", "generation", "context")
+ CRITIC_CHECKS = {"evidence_grounded", "bounded_change", "preserves_success", "testable_prediction"}
++# RRSI's critic rejects edits that encode task names, entities, values or answers, and inert machinery.
++CRITIC_CHECKS_V2 = CRITIC_CHECKS | {"task_agnostic", "no_inert_addition"}
+ CRITIC_SCHEMAS = {"research_harness_critic.v1", "research_harness_critic.v2"}
++PREDICTIONS = ({"metric": "passed_checks", "direction": "increase"},
++               {"metric": "total_seconds", "direction": "decrease"})
++PREDICTIONS_V2 = PREDICTIONS + ({"metric": "bundle_size", "direction": "decrease"},)
++LINEAGE_ROUNDS = 8
++PRUNE_WINDOW = 3
++CONTRAST_EXAMPLES = 5
+ MAX_CANDIDATES = 4
+ MAX_CASES = 60
+ DECISION_RULE = "paired_sign_wilson_v1"
+@@ -95,6 +109,95 @@ def wilson_lower(successes, trials, z):
+     return (centre - margin) / denominator
+ 
+ 
++def wilson_upper(successes, trials, z):
++    return 1.0 - wilson_lower(trials - successes, trials, z) if trials > 0 else 1.0
++
++
++def bundle_size(obj):
++    """Characters a bundle puts before the Agent: prompts, generator questions, per-item context budget.
++
++    RRSI found unregularized evolution keeps adding machinery (1.56M -> 3.80M tokens per trial)
++    with no out-of-distribution gain; this makes growth and simplification visible and comparable.
++    """
++    return (sum(len(text) for text in obj["prompts"].values()) +
++            sum(len(question) for question in obj["generation"]["questions"]) + obj["context"]["chars_per_item"])
++
++
++def lineage(s, cfg):
++    """Earlier rounds' candidates with raw proposal and bundle references, oldest first.
++
++    Meta-Harness found that summaries drop the diagnostic detail a proposer needs, so each prior
++    candidate keeps its component, measured effect, reasons and size change, not a digest.
++    """
++    rounds, ref = [], cfg.get("previous_review")
++    while ref and len(rounds) < LINEAGE_ROUNDS:
++        review = s.read(s.bound(ref))
++        incumbent_size = bundle_size(s.read(s.bound(review["incumbent"])))
++        candidates = []
++        for item in review["comparisons"]:
++            entry = {"bundle": item["bundle"], "proposal": item["proposal"],
++                     "component": s.read(s.bound(item["proposal"]))["component"],
++                     "state": item["state"], "accepted": item["accepted"], "reasons": item["reasons"],
++                     "size_change": bundle_size(s.read(s.bound(item["bundle"]))) - incumbent_size,
++                     "prediction_outcome": item.get("prediction_outcome")}
++            entry.update({key: item[key] for key in ("wins", "losses", "ties", "wilson_lower", "passed_checks") if key in item})
++            candidates.append(entry)
++        rounds.append({"review": ref, "kind": review["kind"], "decision": review["decision"],
++                       "incumbent": review["incumbent"], "incumbent_size": incumbent_size, "candidates": candidates})
++        ref = s.read(s.bound(review["contract"])).get("previous_review")
++    rounds.reverse()
++    return rounds
++
++
++def prune_hints(rounds):
++    """RRSI pruner: a component whose measured edits in the recent window never gained is a removal target.
++
++    Hints only; nothing is blocked. Under the v2 rule a removal competes on non-inferiority.
++    """
++    window = [c for r in rounds[-PRUNE_WINDOW:] for c in r["candidates"] if c["state"] in {"gain", "no_gain"}]
++    hints = []
++    for component in COMPONENTS:
++        measured = [c for c in window if c["component"] == component]
++        if measured and not any(c["state"] == "gain" for c in measured):
++            hints.append({"component": component, "measured_edits": len(measured),
++                          "edits_that_grew_the_bundle": sum(c["size_change"] > 0 for c in measured),
++                          "suggestion": "最近几轮对该组件的改动都没有测得收益；优先考虑删除或缩短其中已有内容，而不是继续添加。"})
++    return hints
++
++
++def contrast(review, incumbent):
++    """Harness² / ModularRSI: a passing and a failing run of the same case, side by side.
++
++    A check the incumbent fails across many cases points at a general method deficiency; a check
++    one variant passes and the other fails on the same case shows what an edit actually changed.
++    """
++    matrix = review.get("case_matrix") if review else None
++    if not matrix:
++        return None
++    mine = incumbent["sha256"]
++    recurring, pairs = {}, {}
++    for row in matrix:
++        own = row["runs"].get(mine)
++        if own is None:
++            continue
++        for check in own["failed"] if own["status"] == "completed" else ["attempt_" + own["status"]]:
++            recurring.setdefault(check, []).append(row["case"])
++        for other, run in sorted(row["runs"].items()):
++            if other == mine or own["status"] != "completed" or run["status"] != "completed":
++                continue
++            for direction, passing, failing in (("other_passes", run, own), ("incumbent_passes", own, run)):
++                for check in sorted(set(failing["failed"]) & set(passing["passed"])):
++                    pairs.setdefault((check, direction, other), []).append(
++                        {"case": row["case"], "passing": passing["result"], "failing": failing["result"]})
++    return {"incumbent": incumbent, "source_review_cases": len(matrix),
++            "how_to_use": "先打开同一案例上一通过、一失败的两份结果对比差异；优先处理跨案例重复出现的缺陷，不要只凭单个案例改。",
++            "recurring_failures": [{"check": check, "cases": len(cases), "examples": cases[:CONTRAST_EXAMPLES]}
++                                   for check, cases in sorted(recurring.items(), key=lambda kv: (-len(kv[1]), kv[0]))],
++            "pairs": [{"check": check, "direction": direction, "other_bundle": other, "cases": len(items),
++                       "examples": items[:CONTRAST_EXAMPLES]}
++                      for (check, direction, other), items in sorted(pairs.items(), key=lambda kv: (-len(kv[1]), kv[0]))]}
++
++
+ LEGACY_RULE = {"rule": "legacy_v1"}
+ 
+ 
+@@ -109,7 +212,8 @@ def decision_rule(s, spec):
+     if supplied is None:
+         return dict(LEGACY_RULE)
+     rule = {"rule": DECISION_RULE, "min_cases": MIN_CASES[spec["kind"]], "confidence": 0.9,
+-            "critical_checks": [], "max_unpaired_share": 0.2, "cost_tolerance": 0.0}
++            "critical_checks": [], "max_unpaired_share": 0.2, "cost_tolerance": 0.0,
++            "max_simplification_loss_share": 0.2}
+     if supplied is not None:
+         s.require(isinstance(supplied, dict) and set(supplied) <= set(rule) and
+                   supplied.get("rule") == DECISION_RULE, "decision_rule must name rule paired_sign_wilson_v1")
+@@ -123,6 +227,8 @@ def decision_rule(s, spec):
+               "critical checks must be criterion ids")
+     s.require(s.number(rule["max_unpaired_share"]) and 0 <= rule["max_unpaired_share"] <= 0.5, "invalid unpaired share")
+     s.require(s.number(rule["cost_tolerance"]) and 0 <= rule["cost_tolerance"] <= 0.5, "invalid cost tolerance")
++    s.require(s.number(rule["max_simplification_loss_share"]) and 0 < rule["max_simplification_loss_share"] <= 0.5,
++              "invalid simplification loss share")
+     return rule
+ 
+ 
+@@ -424,13 +530,17 @@ def reflection_payload(s, contract_ref, cfg):
+     reader, packet = guidance(s, cfg, "reflection")
+     instructions = reflection_instructions(reader, packet, profile)
+     s.require(len(instructions) <= cfg["limits"]["context_chars"], "reflection context budget exceeded")
++    rounds = lineage(s, cfg)
+     return {"schema": "research_harness_reflection_task.v1", "contract": contract_ref,
+             "incumbent": cfg["incumbent"], "evidence": cfg["evidence"], "cases": cfg["cases"],
+             "instructions": instructions, "guidance": cfg["guidance"]["reflection"],
+             "guidance_inventory": reader.inventory(packet),
+             "required_answers": ["diagnosis", "alternative_explanation", "preserve", "expected_effect", "stop_rule"],
+             "allowed_components": list(COMPONENTS), "previous_review": cfg.get("previous_review"),
+-            "feedback": prior["comparisons"] if prior else None, "execution_feedback": execution}
++            "feedback": prior["comparisons"] if prior else None, "execution_feedback": execution,
++            "contrast": contrast(prior, cfg["incumbent"]), "lineage": rounds, "prune_hints": prune_hints(rounds),
++            "incumbent_size": bundle_size(profile),
++            "allowed_predictions": list(PREDICTIONS if resolved_rule(cfg)["rule"] == "legacy_v1" else PREDICTIONS_V2)}
+ 
+ 
+ def proposals(s, directory, cfg):
+@@ -473,9 +583,9 @@ def proposal_record(s, directory, cfg, proposal_ref, critic_ref):
+     s.require(all(ref in allowed for ref in proposal["evidence"]), "proposal uses evidence outside frozen inputs")
+     for key in ("diagnosis", "alternative_explanation", "preserve", "stop_rule"):
+         nonempty(s, proposal[key], key)
++    legacy = resolved_rule(cfg)["rule"] == "legacy_v1"
+     prediction = proposal["expected_effect"]
+-    s.require(prediction in ({"metric": "passed_checks", "direction": "increase"},
+-                            {"metric": "total_seconds", "direction": "decrease"}), "testable method prediction required")
++    s.require(prediction in (PREDICTIONS if legacy else PREDICTIONS_V2), "testable method prediction required")
+     original = bundle(s, cfg["incumbent"], cfg["branch"])
+     candidate = bundle(s, proposal["bundle"], cfg["branch"])
+     changed = [key for key in COMPONENTS if original[key] != candidate[key]]
+@@ -485,13 +595,13 @@ def proposal_record(s, directory, cfg, proposal_ref, critic_ref):
+               critic["contract"] == contract_ref and critic["independent"] is True, "critic binding mismatch")
+     nonempty(s, critic["verifier"], "critic verifier")
+     refs(s, critic["evidence"], "critic evidence")
+-    s.require(set(critic["checks"]) == CRITIC_CHECKS and all(type(v) is bool for v in critic["checks"].values()),
+-              "invalid critic checks")
++    s.require(set(critic["checks"]) == (CRITIC_CHECKS if legacy else CRITIC_CHECKS_V2) and
++              all(type(v) is bool for v in critic["checks"].values()), "invalid critic checks")
+     accepted = all(critic["checks"].values())
+     record = {"schema": "research_harness_candidate.v1", "contract": contract_ref, "input": proposal_ref,
+               "review": critic_ref, "bundle": proposal["bundle"], "component": changed[0],
+               "expected_effect": prediction, "accepted": accepted}
+-    if resolved_rule(cfg)["rule"] != "legacy_v1":
++    if not legacy:
+         # Opt-in v2: a bundle that writes security codes or dates is rejected before evaluation.
+         # Critic model family is recorded so reviewers can see same-model review; it never blocks.
+         leakage = bundle_leakage(original, candidate)
+@@ -710,13 +820,13 @@ def dominates_v1(a, b):
+     return preserves_checks and a["cost"] <= b["cost"] and strict_gain
+ 
+ 
+-def compare_attempts(s, baseline, candidate, cfg):
++def compare_attempts(s, baseline, candidate, cfg, sizes=None):
+     if resolved_rule(cfg)["rule"] == "legacy_v1":
+         return compare_attempts_v1(s, baseline, candidate, cfg)
+-    return compare_attempts_v2(s, baseline, candidate, cfg)
++    return compare_attempts_v2(s, baseline, candidate, cfg, sizes)
+ 
+ 
+-def compare_attempts_v2(s, baseline, candidate, cfg):
++def compare_attempts_v2(s, baseline, candidate, cfg, sizes=None):
+     """Paired sign test over frozen cases.
+ 
+     v1 rejected a candidate if any single check in any case regressed, and if any cost
+@@ -727,6 +837,10 @@ def compare_attempts_v2(s, baseline, candidate, cfg):
+     A failed or unknown candidate attempt counts as a loss; a failed baseline attempt
+     leaves its case unpaired. Unknown cost is reported, never counted as a saving, and
+     does not block a bounded pilot offer.
++
++    ``sizes`` is (incumbent, candidate) bundle_size. Following RRSI's pruner, a strictly
++    smaller bundle need not prove a gain: it passes when the Wilson upper bound of its
++    loss share over paired cases is at most max_simplification_loss_share.
+     """
+     rule = resolved_rule(cfg)
+     if not baseline or not candidate or len(baseline) != len(candidate):
+@@ -774,19 +888,29 @@ def compare_attempts_v2(s, baseline, candidate, cfg):
+         reasons.append("bounded pilot needs complete measured costs")
+     check_gain = decided > 0 and lower > 0.5
+     cost_gain = cost_known and losses == 0 and new_cost < old_cost
+-    if not (check_gain or cost_gain):
++    paired = wins + losses + ties
++    loss_upper = wilson_upper(losses, paired, CONFIDENCE_Z[rule["confidence"]])
++    simplification = (sizes is not None and sizes[1] < sizes[0] and paired > 0 and
++                      loss_upper <= rule["max_simplification_loss_share"])
++    if not (check_gain or cost_gain or simplification):
+         reasons.append("no significant advantage")
++    advantage = None
++    if not reasons:
++        advantage = "checks" if check_gain else "cost" if cost_gain else "simpler_non_inferior"
+     return {"accepted": not reasons, "state": "gain" if not reasons else "no_gain", "reasons": reasons,
++            "advantage": advantage,
+             "wins": wins, "losses": losses, "ties": ties, "unpaired": unpaired, "cases": cases,
+-            "wilson_lower": lower, "confidence": rule["confidence"], "critical_regressions": critical,
++            "wilson_lower": lower, "loss_share_upper": loss_upper,
++            "confidence": rule["confidence"], "critical_regressions": critical,
+             "passed_checks": [old_passed, new_passed],
+             "total_seconds": [old_cost, new_cost] if cost_known else None,
+-            "cost_known": cost_known, "cost": new_cost}
++            "cost_known": cost_known, "cost": new_cost, "bundle_size": list(sizes) if sizes else None}
+ 
+ 
+ def preference(item):
+-    """Order accepted candidates: stronger evidence first, then lower known cost, then content hash."""
+-    return (-item["wilson_lower"], item["cost"] if item["cost"] is not None else math.inf, item["bundle"]["sha256"])
++    """Order accepted candidates: stronger evidence, lower known cost, smaller bundle, then content hash."""
++    return (-item["wilson_lower"], item["cost"] if item["cost"] is not None else math.inf,
++            item["bundle_size"][1] if item.get("bundle_size") else math.inf, item["bundle"]["sha256"])
+ 
+ 
+ def prediction_outcome(prediction, comparison):
+@@ -814,10 +938,11 @@ def review_round(s, directory, publish=True, evolution_cost_receipt=None):
+     s.require(len(all_variants) > 1 or proposals(s, directory, cfg), "no harness proposals to review")
+     measurements, sources = {}, []
+     all_events = []
++    idents = [case(s, entry["input"], cfg["branch"])["id"] for entry in cfg["cases"]]
++    case_matrix = [{"case": ident, "runs": {}} for ident in idents]
+     for ref, _ in all_variants:
+         runs = []
+-        for entry in cfg["cases"]:
+-            ident = case(s, entry["input"], cfg["branch"])["id"]
++        for entry, ident, row in zip(cfg["cases"], idents, case_matrix):
+             path = Path(directory) / "runs" / ref["sha256"] / ident / "RESULT.json"
+             s.require(path.exists(), "paired evaluation incomplete; record completed, failed or unknown for every task")
+             result_ref = s.reference(path)
+@@ -829,14 +954,20 @@ def review_round(s, directory, publish=True, evolution_cost_receipt=None):
+             all_events.extend(measured["cost"]["events"])
+             sources.append(result_ref)
+             runs.append(measured)
++            # Per-case checks feed the next round's contrast; the aggregate alone hides which case moved.
++            row["runs"][ref["sha256"]] = {"status": measured["status"], "result": result_ref,
++                                          "passed": sorted(k for k, v in measured["checks"].items() if v),
++                                          "failed": sorted(k for k, v in measured["checks"].items() if not v)}
+         measurements[ref["sha256"]] = runs
+     # A timer cannot be shared between arms to make costs look equal or cheap.
+     event_sources = [(e["evidence"]["sha256"], e["seconds_path"]) for e in all_events]
+     s.require(len(event_sources) == len(set(event_sources)), "cost measurement reused across paired attempts")
+     baseline = measurements[cfg["incumbent"]["sha256"]]
++    incumbent_size = bundle_size(bundle(s, cfg["incumbent"], cfg["branch"]))
+     comparisons = []
+     for ref, proposal_ref in all_variants[1:]:
+-        compared = compare_attempts(s, baseline, measurements[ref["sha256"]], cfg)
++        sizes = (incumbent_size, bundle_size(bundle(s, ref, cfg["branch"])))
++        compared = compare_attempts(s, baseline, measurements[ref["sha256"]], cfg, sizes)
+         proposal = s.read(s.bound(proposal_ref))
+         prediction = proposal["expected_effect"]
+         comparisons.append({"bundle": ref, "proposal": proposal_ref, **compared,
+@@ -877,6 +1008,7 @@ def review_round(s, directory, publish=True, evolution_cost_receipt=None):
+     total_cost = s.summarize_cost(all_events + evolution_events, all_missing)
+     obj = {"schema": "research_harness_review.v1", "at": s.now(), "contract": contract_ref,
+            "branch": cfg["branch"], "kind": cfg["kind"], "incumbent": cfg["incumbent"], "comparisons": comparisons,
++           "case_matrix": case_matrix,
+            "attempts": sources, "complete": complete, "decision": decision, "next_harness": selected,
+            "winner_proposal": winner["proposal"] if winner else None, "fixture_winner": winner["bundle"] if winner and cfg["kind"] == "synthetic" else None,
+            "efficiency_improvement_claimed": False, "economic_promotion": False,
+diff --git a/engine/research_online_ab.py b/engine/research_online_ab.py
+index fcc3603..f86f645 100644
+--- a/engine/research_online_ab.py
++++ b/engine/research_online_ab.py
+@@ -20,6 +20,14 @@ Decision rule (frozen in --rule or defaults):
+   prefer_incumbent   success-rate difference upper bound < 0
+   no_difference      otherwise
+ Intervals are Newcombe hybrid score intervals built from Wilson intervals.
++
++Budget-matched control (Rethinking the Evaluation of Harness Evolution, 2607.12227):
++evolved harnesses often fail to beat the old harness given the same extra budget
++(more samples or retries). --control takes batches run with the incumbent plus that
++extra budget; the report states whether the candidate beats it. Costs are summed
++from each O record's total_seconds, and --candidate-overhead adds the cost of
++producing the candidate (a harness REVIEW's whole_round_cost or a cycle REPORT's
++all_in_evolution_cost_seconds). The control result is reported, never a gate.
+ """
+ from __future__ import annotations
+ 
+@@ -70,8 +78,21 @@ def walkforward_pass(observation):
+     return verdict.get("decision") == "pass"
+ 
+ 
++def overhead_seconds(paths):
++    """Summed cost of producing the candidate; None when any source has not measured it."""
++    total = 0.0
++    for path in paths:
++        report = read(path)
++        seconds = (report["whole_round_cost"]["all_in_method_cost_seconds"] if "whole_round_cost" in report
++                   else report.get("all_in_evolution_cost_seconds"))
++        if seconds is None:
++            return None
++        total += seconds
++    return total
++
++
+ def arm_summary(directories):
+-    rows, minutes, policies, harnesses = [], [], set(), set()
++    rows, minutes, seconds, policies, harnesses = [], [], [], set(), set()
+     for directory in directories:
+         directory = Path(directory)
+         batch = read(directory / "BATCH.json")
+@@ -83,6 +104,7 @@ def arm_summary(directories):
+             decision = read(directory / ("D" + outcome_path.name[1:]))
+             category = STATUS_TO_CATEGORY.get(outcome["observation"]["status"], "unclassified")
+             rows.append({"category": category, "validated": walkforward_pass(outcome)})
++            seconds.append(outcome.get("total_seconds"))
+             started = datetime.fromisoformat(decision["at"].replace("Z", "+00:00"))
+             finished = datetime.fromisoformat(outcome["at"].replace("Z", "+00:00"))
+             minutes.append((finished - started).total_seconds() / 60)
+@@ -94,18 +116,52 @@ def arm_summary(directories):
+     # account whose folds happen to pass is still not a success.
+     success = sum(1 for row in rows if row["category"] == "improvement" and
+                   (row["validated"] is True if has_walkforward else True))
++    resource = None if not seconds or any(v is None for v in seconds) else sum(seconds)
+     return {"batches": len(directories), "decisions": len(rows), "counts": counts,
+             "success_measure": "validated" if has_walkforward else "improvement", "successes": success,
+             "no_verdict": sum(counts.get(c, 0) for c in NO_VERDICT),
+             "median_minutes_decision_to_outcome": statistics.median(minutes) if minutes else None,
++            "resource_seconds": resource,
+             "policies": sorted(policies), "harness_bundles": sorted(harnesses)}
+ 
+ 
+-def compare(incumbent_dirs, candidate_dirs, rule=None):
++def per_success(seconds, successes):
++    return None if seconds is None or successes == 0 else seconds / successes
++
++
++def control_comparison(candidate, control, z):
++    """Candidate against the incumbent given the same extra budget."""
++    if candidate["success_measure"] != control["success_measure"]:
++        return {"result": "not_comparable", "reason": "arms use different success measures"}
++    if min(candidate["decisions"], control["decisions"]) == 0:
++        return {"result": "not_comparable", "reason": "an arm has no observed decisions"}
++    interval = newcombe(candidate["successes"], candidate["decisions"], control["successes"], control["decisions"], z)
++    verdict = "candidate_better" if interval[0] > 0 else "control_better" if interval[1] < 0 else "no_difference"
++    return {"result": verdict, "success_rate_difference_interval": interval}
++
++
++def compare(incumbent_dirs, candidate_dirs, rule=None, control_dirs=None, candidate_overhead=None):
+     rule = {**DEFAULT_RULE, **(rule or {})}
+     z = Z[rule["confidence"]]
+     a, b = arm_summary(incumbent_dirs), arm_summary(candidate_dirs)
+     result = {"schema": "research_online_ab.v1", "rule": rule, "incumbent": a, "candidate": b}
++    # Report cost per success, with the candidate charged for its own evolution when measured.
++    overhead = overhead_seconds(candidate_overhead) if candidate_overhead else None
++    charged = (None if b["resource_seconds"] is None or (candidate_overhead and overhead is None)
++               else b["resource_seconds"] + (overhead or 0.0))
++    result["cost"] = {"candidate_overhead_seconds": overhead if candidate_overhead else "not_supplied",
++                      "seconds_per_success": {"incumbent": per_success(a["resource_seconds"], a["successes"]),
++                                              "candidate_including_overhead": per_success(charged, b["successes"])}}
++    if control_dirs:
++        c = arm_summary(control_dirs)
++        result["control"] = c
++        result["cost"]["seconds_per_success"]["control"] = per_success(c["resource_seconds"], c["successes"])
++        result["budget_matched_control"] = control_comparison(b, c, z)
++        if c["resource_seconds"] is not None and charged:
++            result["budget_matched_control"]["control_to_candidate_cost_ratio"] = c["resource_seconds"] / charged
++    else:
++        result["budget_matched_control"] = {"result": "not_run",
++            "reason": "without the incumbent given the same extra budget, a gain may come from spending more, not from the new version"}
+     if a["success_measure"] != b["success_measure"]:
+         result["decision"] = "insufficient_data"
+         result["reason"] = "arms use different success measures; attach walk-forward verdicts to both"
+@@ -136,12 +192,15 @@ def main(argv=None):
+     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+     parser.add_argument("--incumbent", nargs="+", required=True, help="closed batch directories run with the incumbent")
+     parser.add_argument("--candidate", nargs="+", required=True, help="closed batch directories run with the candidate")
++    parser.add_argument("--control", nargs="+", help="closed batches run with the incumbent plus the candidate's extra budget")
++    parser.add_argument("--candidate-overhead", nargs="+",
++                        help="harness REVIEW.json or cycle REPORT.json files whose cost produced the candidate")
+     parser.add_argument("--rule", help="frozen JSON overriding min_decisions / confidence / max_no_verdict_increase")
+     parser.add_argument("--out")
+     args = parser.parse_args(argv)
+     try:
+         rule = read(args.rule) if args.rule else None
+-        result = compare(args.incumbent, args.candidate, rule)
++        result = compare(args.incumbent, args.candidate, rule, args.control, args.candidate_overhead)
+         text = json.dumps(result, ensure_ascii=False, indent=2)
+         if args.out:
+             with open(args.out, "x", encoding="utf-8", newline="\n") as handle:
+diff --git a/tests/test_harness_paper_essence.py b/tests/test_harness_paper_essence.py
+new file mode 100644
+index 0000000..4badbc9
+--- /dev/null
++++ b/tests/test_harness_paper_essence.py
+@@ -0,0 +1,270 @@
++"""Changes taken from the 2026 RSI papers (2026-10-17).
++
++- Meta-Harness: the reflection task carries every earlier candidate, not a summary (lineage).
++- Harness² / ModularRSI: passing and failing runs of the same case side by side (contrast).
++- RRSI pruner: components whose edits never gained become removal hints; under the v2 rule a
++  strictly smaller bundle passes on non-inferiority and ties prefer the smaller bundle.
++- RRSI critic: under the v2 rule the critic also judges task specificity and inert additions.
++- Rethinking Harness Evolution: the online A/B reports a budget-matched control and cost per success.
++
++Unit tests run anywhere. The end-to-end tests reuse the original harness fixtures and are skipped
++when the project's tests/test_research_frontier.py is not present.
++Run from the project root:  python -X utf8 -B -m unittest discover -s tests -p "test_harness_paper_essence.py" -v
++"""
++import importlib.util
++import json
++from pathlib import Path
++import tempfile
++import unittest
++
++ENGINE = Path(__file__).resolve().parent.parent / "engine"
++
++
++def load(name):
++    spec = importlib.util.spec_from_file_location(name, ENGINE / (name + ".py"))
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module
++
++
++s = load("research_scheduler")
++h = load("research_harness")
++ab = load("research_online_ab")
++Z = h.CONFIDENCE_Z[0.9]
++
++try:
++    import test_research_harness as original
++except ImportError:  # test_research_frontier.py is not in every checkout
++    original = None
++
++
++def attempt(passed, total=2, status="completed", cost=None):
++    return {"status": status, "checks": {f"c{i}": i < passed for i in range(total)} if status == "completed" else {},
++            "cost": {"all_in_method_cost_seconds": cost}}
++
++
++def rule_cfg(**rule):
++    resolved = {"rule": h.DECISION_RULE, "min_cases": 16, "confidence": 0.9, "critical_checks": [],
++                "max_unpaired_share": 0.2, "cost_tolerance": 0.0, "max_simplification_loss_share": 0.2, **rule}
++    return {"decision_rule_resolved": resolved, "limits": {"resource_seconds": 100}, "kind": "development"}
++
++
++class SimplificationRuleTests(unittest.TestCase):
++    api = s.harness_api()
++
++    def test_wilson_upper_matches_the_documented_thresholds(self):
++        self.assertAlmostEqual(h.wilson_upper(0, 16, Z), 0.1447, places=3)
++        self.assertGreater(h.wilson_upper(1, 16, Z), 0.2)
++        self.assertLess(h.wilson_upper(2, 30, Z), 0.2)
++
++    def test_smaller_bundle_with_no_losses_passes_without_proving_a_gain(self):
++        result = h.compare_attempts(self.api, [attempt(1)] * 16, [attempt(1)] * 16, rule_cfg(), sizes=(5000, 4000))
++        self.assertTrue(result["accepted"], result)
++        self.assertEqual(result["advantage"], "simpler_non_inferior")
++        self.assertEqual(result["bundle_size"], [5000, 4000])
++
++    def test_simplification_still_needs_non_inferiority(self):
++        one_loss = [attempt(1)] * 15 + [attempt(0)]
++        result = h.compare_attempts(self.api, [attempt(1)] * 16, one_loss, rule_cfg(), sizes=(5000, 4000))
++        self.assertIn("no significant advantage", result["reasons"])
++        critical = [attempt(2)] * 15 + [{"status": "completed", "checks": {"c0": False, "c1": True},
++                                         "cost": {"all_in_method_cost_seconds": None}}]
++        result = h.compare_attempts(self.api, [attempt(2)] * 16, critical, rule_cfg(critical_checks=["c0"]),
++                                    sizes=(5000, 4000))
++        self.assertFalse(result["accepted"])
++
++    def test_equal_or_larger_bundle_gets_no_simplification_credit(self):
++        for sizes in ((5000, 5000), (5000, 6000), None):
++            result = h.compare_attempts(self.api, [attempt(1)] * 16, [attempt(1)] * 16, rule_cfg(), sizes=sizes)
++            self.assertIn("no significant advantage", result["reasons"])
++
++    def test_v1_rule_ignores_sizes(self):
++        cfg = {"limits": {"resource_seconds": 100}}
++        result = h.compare_attempts(self.api, [attempt(1)], [attempt(1)], cfg, sizes=(5000, 1))
++        self.assertNotIn("bundle_size", result)
++        self.assertFalse(result["accepted"])
++
++    def test_ties_prefer_the_smaller_bundle(self):
++        small = {"wilson_lower": 0.7, "cost": None, "bundle_size": [5000, 3000], "bundle": {"sha256": "f" * 64}}
++        large = {"wilson_lower": 0.7, "cost": None, "bundle_size": [5000, 6000], "bundle": {"sha256": "0" * 64}}
++        stronger = {**large, "wilson_lower": 0.8}
++        self.assertIs(min([large, small], key=h.preference), small)
++        self.assertIs(min([small, stronger], key=h.preference), stronger)
++
++    def test_rule_parameter_is_validated(self):
++        spec = {"kind": "development", "decision_rule": {"rule": h.DECISION_RULE, "max_simplification_loss_share": 0.9}}
++        with self.assertRaisesRegex(ValueError, "simplification loss share"):
++            h.decision_rule(self.api, spec)
++        resolved = h.decision_rule(self.api, {"kind": "development", "decision_rule": {"rule": h.DECISION_RULE}})
++        self.assertEqual(resolved["max_simplification_loss_share"], 0.2)
++
++    def test_bundle_size_counts_prompts_questions_and_context_budget(self):
++        base = json.loads((ENGINE / "research_harness_default.json").read_text(encoding="utf-8"))
++        shorter = json.loads(json.dumps(base))
++        shorter["prompts"]["generation"] = shorter["prompts"]["generation"][:10]
++        self.assertLess(h.bundle_size(shorter), h.bundle_size(base))
++        self.assertEqual(h.bundle_size(base), sum(map(len, base["prompts"].values())) +
++                         sum(map(len, base["generation"]["questions"])) + base["context"]["chars_per_item"])
++
++
++class ReflectionHintTests(unittest.TestCase):
++    @staticmethod
++    def round_with(*candidates):
++        return {"candidates": [{"component": c, "state": state, "size_change": grow} for c, state, grow in candidates]}
++
++    def test_component_with_only_unsuccessful_measured_edits_is_a_prune_hint(self):
++        rounds = [self.round_with(("generation", "gain", 10)),
++                  self.round_with(("prompts", "no_gain", 40), ("generation", "critic_rejected", 5)),
++                  self.round_with(("prompts", "no_gain", -5), ("context", "incomplete", 0))]
++        hints = h.prune_hints(rounds)
++        self.assertEqual([hint["component"] for hint in hints], ["prompts"])
++        self.assertEqual((hints[0]["measured_edits"], hints[0]["edits_that_grew_the_bundle"]), (2, 1))
++
++    def test_prune_window_forgets_old_rounds(self):
++        rounds = [self.round_with(("context", "no_gain", 1))] + [self.round_with()] * h.PRUNE_WINDOW
++        self.assertEqual(h.prune_hints(rounds), [])
++
++    def test_contrast_pairs_and_recurring_failures(self):
++        mine, other = "a" * 64, "b" * 64
++        def run(passed, failed, status="completed", tag=""):
++            return {"status": status, "passed": passed, "failed": failed, "result": {"path": tag, "sha256": tag}}
++        review = {"case_matrix": [
++            {"case": "c1", "runs": {mine: run(["p"], ["d"], tag="m1"), other: run(["d", "p"], [], tag="o1")}},
++            {"case": "c2", "runs": {mine: run(["p"], ["d"], tag="m2"), other: run(["d"], ["p"], tag="o2")}},
++            {"case": "c3", "runs": {mine: run([], [], status="failed", tag="m3"), other: run(["d", "p"], [], tag="o3")}}]}
++        result = h.contrast(review, {"path": "x", "sha256": mine})
++        self.assertEqual(result["recurring_failures"][0], {"check": "d", "cases": 2, "examples": ["c1", "c2"]})
++        self.assertIn({"check": "attempt_failed", "cases": 1, "examples": ["c3"]}, result["recurring_failures"])
++        gained = next(p for p in result["pairs"] if p["direction"] == "other_passes")
++        self.assertEqual((gained["check"], gained["cases"]), ("d", 2))
++        self.assertEqual(gained["examples"][0], {"case": "c1", "passing": {"path": "o1", "sha256": "o1"},
++                                                 "failing": {"path": "m1", "sha256": "m1"}})
++        lost = next(p for p in result["pairs"] if p["direction"] == "incumbent_passes")
++        self.assertEqual((lost["check"], lost["cases"]), ("p", 1))
++        self.assertIsNone(h.contrast({"comparisons": []}, {"sha256": mine}))
++
++
++class BudgetMatchedControlTests(unittest.TestCase):
++    def setUp(self):
++        self._tmp = tempfile.TemporaryDirectory()
++        self.root = Path(self._tmp.name)
++
++    def tearDown(self):
++        self._tmp.cleanup()
++
++    def batch(self, name, statuses, seconds=60.0):
++        directory = self.root / name
++        s.write(directory / "BATCH.json", {"policy": {"id": name}})
++        for i, status in enumerate(statuses, 1):
++            s.write(directory / f"D{i:04d}.json", {"at": "2026-10-16T00:00:00+00:00"})
++            s.write(directory / f"O{i:04d}.json", {"at": "2026-10-16T00:30:00+00:00", "total_seconds": seconds,
++                                                    "observation": {"status": status}})
++        return directory
++
++    def test_candidate_that_only_matches_extra_budget_is_reported(self):
++        old = self.batch("old", ["valid_negative"] * 36 + ["valid_improvement"] * 4)
++        new = self.batch("new", ["valid_negative"] * 20 + ["valid_improvement"] * 20, seconds=120.0)
++        control = self.batch("ctl", ["valid_negative"] * 19 + ["valid_improvement"] * 21, seconds=120.0)
++        result = ab.compare([old], [new], control_dirs=[control])
++        self.assertEqual(result["decision"], "prefer_candidate")  # unchanged rule against the incumbent
++        self.assertEqual(result["budget_matched_control"]["result"], "no_difference")
++        self.assertAlmostEqual(result["budget_matched_control"]["control_to_candidate_cost_ratio"], 1.0)
++        per = result["cost"]["seconds_per_success"]
++        self.assertEqual((per["incumbent"], per["candidate_including_overhead"], per["control"]),
++                         (40 * 60.0 / 4, 40 * 120.0 / 20, 40 * 120.0 / 21))
++
++    def test_overhead_is_charged_to_the_candidate_and_unknown_stays_unknown(self):
++        old = self.batch("old", ["valid_improvement"] * 30)
++        new = self.batch("new", ["valid_improvement"] * 30)
++        review = self.root / "REVIEW.json"
++        s.write(review, {"whole_round_cost": {"all_in_method_cost_seconds": 600.0}})
++        unknown = self.root / "REPORT.json"
++        s.write(unknown, {"all_in_evolution_cost_seconds": None})
++        result = ab.compare([old], [new], candidate_overhead=[review])
++        self.assertEqual(result["cost"]["seconds_per_success"]["candidate_including_overhead"], (30 * 60.0 + 600.0) / 30)
++        self.assertEqual(result["budget_matched_control"]["result"], "not_run")
++        result = ab.compare([old], [new], candidate_overhead=[review, unknown])
++        self.assertIsNone(result["cost"]["candidate_overhead_seconds"])
++        self.assertIsNone(result["cost"]["seconds_per_success"]["candidate_including_overhead"])
++
++
++if original is not None:
++    # Reuse the original fixtures without re-running the original tests under a new name.
++    Fixture = type("Fixture", (unittest.TestCase,),
++                   {k: v for k, v in vars(original.HarnessTests).items() if not k.startswith("test")})
++else:
++    Fixture = unittest.TestCase
++
++
++@unittest.skipIf(original is None, "needs tests/test_research_frontier.py from the project")
++class EndToEndTests(Fixture):
++    def critic(self, directory, proposal, checks):
++        return self.save("critic", {"schema": "research_harness_critic.v1", "proposal": proposal,
++            "contract": s.reference(directory / "CONTRACT.json"), "independent": True,
++            "verifier": "synthetic-independent-reviewer", "evidence": [s.reference(self.fact)],
++            "checks": {key: True for key in checks}})
++
++    def v2_proposal(self, directory, bundle, component, prediction):
++        return self.save("proposal", {"schema": "research_harness_proposal.v1", "parent": self.base,
++            "reflection_task": s.reference(directory / "REFLECTION_TASK.json"), "evidence": [s.reference(self.fact)],
++            "diagnosis": "generation prompt repeats rules the guard already states",
++            "alternative_explanation": "the repetition may still anchor attention",
++            "preserve": "identity and counterexample checks", "stop_rule": "any case loses a passing check",
++            "expected_effect": prediction, "component": component, "bundle": bundle})
++
++    def test_review_matrix_feeds_lineage_and_contrast_of_the_next_round(self):
++        directory, candidate, report = self.compared()
++        self.assertEqual(len(report["case_matrix"]), 1)
++        row = report["case_matrix"][0]["runs"]
++        self.assertEqual(row[self.base["sha256"]]["failed"], ["distinct"])
++        self.assertEqual(row[candidate["sha256"]]["failed"], [])
++        next_round = self.start_round(incumbent=candidate, previous_review=s.reference(directory / "REVIEW.json"))
++        task = s.read(next_round / "REFLECTION_TASK.json")
++        self.assertEqual(len(task["lineage"]), 1)
++        entry = task["lineage"][0]["candidates"][0]
++        self.assertEqual((entry["component"], entry["state"], entry["bundle"]), ("prompts", "gain", candidate))
++        self.assertGreater(entry["size_change"], 0)
++        self.assertEqual(task["prune_hints"], [])
++        pair = task["contrast"]["pairs"][0]
++        self.assertEqual((pair["check"], pair["direction"]), ("distinct", "incumbent_passes"))
++        self.assertEqual(task["incumbent_size"], h.bundle_size(s.read(candidate["path"])))
++        # The task stays reproducible: every proposal re-derives the payload with the round's frozen runtime.
++        contract = s.read(next_round / "CONTRACT.json")
++        runtime = s.harness_runtime(contract["runtime"])
++        self.assertEqual(runtime.reflection_payload(s.harness_api(), s.reference(next_round / "CONTRACT.json"), contract), task)
++
++    def test_v2_critic_must_judge_task_specificity_and_inert_additions(self):
++        directory = self.start_round(kind="synthetic", decision_rule={"rule": h.DECISION_RULE})
++        bundle = self.edit_bundle()
++        proposal = self.v2_proposal(directory, bundle, "prompts", {"metric": "passed_checks", "direction": "increase"})
++        with self.assertRaisesRegex(ValueError, "invalid critic checks"):
++            self.call(directory, "propose", proposal=proposal, review=self.critic(directory, proposal, h.CRITIC_CHECKS))
++        accepted = self.call(directory, "propose", proposal=proposal,
++                             review=self.critic(directory, proposal, h.CRITIC_CHECKS_V2))
++        self.assertTrue(accepted["accepted"])
++        legacy = self.start_round()
++        legacy_proposal = self.v2_proposal(legacy, bundle, "prompts", {"metric": "bundle_size", "direction": "decrease"})
++        with self.assertRaisesRegex(ValueError, "testable method prediction"):
++            self.call(legacy, "propose", proposal=legacy_proposal,
++                      review=self.critic(legacy, legacy_proposal, h.CRITIC_CHECKS))
++
++    def test_v2_shorter_bundle_with_no_losses_wins_on_non_inferiority(self):
++        cases = [self.make_case(f"simple{i}") for i in range(12)]
++        directory = self.start_round(kind="synthetic", decision_rule={"rule": h.DECISION_RULE}, cases=cases)
++        profile = s.read(self.base["path"])
++        profile["prompts"]["generation"] = profile["prompts"]["generation"][:len(profile["prompts"]["generation"]) // 2]
++        shorter = self.save("shorter", profile)
++        proposal = self.v2_proposal(directory, shorter, "prompts", {"metric": "bundle_size", "direction": "decrease"})
++        self.call(directory, "propose", proposal=proposal, review=self.critic(directory, proposal, h.CRITIC_CHECKS_V2))
++        for entry in cases:
++            self.attempt(directory, self.base, entry)
++            self.attempt(directory, shorter, entry)
++        report = self.call(directory, "review")
++        comparison = report["comparisons"][0]
++        self.assertEqual((comparison["state"], comparison["advantage"]), ("gain", "simpler_non_inferior"))
++        self.assertEqual(comparison["prediction_outcome"], "hit")
++        self.assertEqual(report["fixture_winner"], shorter)
++
++
++if __name__ == "__main__":
++    unittest.main()

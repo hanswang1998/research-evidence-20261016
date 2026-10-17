@@ -6,11 +6,17 @@ It never calls a model, executes candidate Python, or submits an experiment.
 Each new round freezes this module, its scheduler and its guidance reader.
 Previously frozen ENGINE.py files and their original runtimes stand alone.
 
-v2 (2026-10-16): paired comparison is a sign test over cases with a Wilson
-lower bound instead of "no single check may regress"; development rounds need
-at least 16 cases; candidate bundles that write security codes or calendar
-dates are rejected before evaluation; the independent critic must come from a
-different model family than the generating Agent.
+v2 (2026-10-16, opt-in via decision_rule): paired comparison is a sign test over
+cases with a Wilson lower bound instead of "no single check may regress";
+development rounds need at least 16 cases; candidate bundles that write security
+codes or calendar dates are rejected before evaluation; whether the critic shares
+the generating Agent's model family is recorded, never enforced.
+
+2026-10-17, from the RSI papers: every reflection task carries the full candidate
+lineage (Meta-Harness), a passing/failing contrast per case (Harness², ModularRSI)
+and removal hints for components whose edits never gained (RRSI pruner). Under the
+v2 rule a strictly smaller bundle may pass on non-inferiority, ties prefer the
+smaller bundle, and the critic also judges task specificity and inert additions.
 """
 import math
 from pathlib import Path
@@ -21,7 +27,15 @@ SCHEMA = "research_harness.v1"
 SECTIONS = ("goal", "evidence", "failures", "successes", "unknowns")
 COMPONENTS = ("prompts", "generation", "context")
 CRITIC_CHECKS = {"evidence_grounded", "bounded_change", "preserves_success", "testable_prediction"}
+# RRSI's critic rejects edits that encode task names, entities, values or answers, and inert machinery.
+CRITIC_CHECKS_V2 = CRITIC_CHECKS | {"task_agnostic", "no_inert_addition"}
 CRITIC_SCHEMAS = {"research_harness_critic.v1", "research_harness_critic.v2"}
+PREDICTIONS = ({"metric": "passed_checks", "direction": "increase"},
+               {"metric": "total_seconds", "direction": "decrease"})
+PREDICTIONS_V2 = PREDICTIONS + ({"metric": "bundle_size", "direction": "decrease"},)
+LINEAGE_ROUNDS = 8
+PRUNE_WINDOW = 3
+CONTRAST_EXAMPLES = 5
 MAX_CANDIDATES = 4
 MAX_CASES = 60
 DECISION_RULE = "paired_sign_wilson_v1"
@@ -95,6 +109,95 @@ def wilson_lower(successes, trials, z):
     return (centre - margin) / denominator
 
 
+def wilson_upper(successes, trials, z):
+    return 1.0 - wilson_lower(trials - successes, trials, z) if trials > 0 else 1.0
+
+
+def bundle_size(obj):
+    """Characters a bundle puts before the Agent: prompts, generator questions, per-item context budget.
+
+    RRSI found unregularized evolution keeps adding machinery (1.56M -> 3.80M tokens per trial)
+    with no out-of-distribution gain; this makes growth and simplification visible and comparable.
+    """
+    return (sum(len(text) for text in obj["prompts"].values()) +
+            sum(len(question) for question in obj["generation"]["questions"]) + obj["context"]["chars_per_item"])
+
+
+def lineage(s, cfg):
+    """Earlier rounds' candidates with raw proposal and bundle references, oldest first.
+
+    Meta-Harness found that summaries drop the diagnostic detail a proposer needs, so each prior
+    candidate keeps its component, measured effect, reasons and size change, not a digest.
+    """
+    rounds, ref = [], cfg.get("previous_review")
+    while ref and len(rounds) < LINEAGE_ROUNDS:
+        review = s.read(s.bound(ref))
+        incumbent_size = bundle_size(s.read(s.bound(review["incumbent"])))
+        candidates = []
+        for item in review["comparisons"]:
+            entry = {"bundle": item["bundle"], "proposal": item["proposal"],
+                     "component": s.read(s.bound(item["proposal"]))["component"],
+                     "state": item["state"], "accepted": item["accepted"], "reasons": item["reasons"],
+                     "size_change": bundle_size(s.read(s.bound(item["bundle"]))) - incumbent_size,
+                     "prediction_outcome": item.get("prediction_outcome")}
+            entry.update({key: item[key] for key in ("wins", "losses", "ties", "wilson_lower", "passed_checks") if key in item})
+            candidates.append(entry)
+        rounds.append({"review": ref, "kind": review["kind"], "decision": review["decision"],
+                       "incumbent": review["incumbent"], "incumbent_size": incumbent_size, "candidates": candidates})
+        ref = s.read(s.bound(review["contract"])).get("previous_review")
+    rounds.reverse()
+    return rounds
+
+
+def prune_hints(rounds):
+    """RRSI pruner: a component whose measured edits in the recent window never gained is a removal target.
+
+    Hints only; nothing is blocked. Under the v2 rule a removal competes on non-inferiority.
+    """
+    window = [c for r in rounds[-PRUNE_WINDOW:] for c in r["candidates"] if c["state"] in {"gain", "no_gain"}]
+    hints = []
+    for component in COMPONENTS:
+        measured = [c for c in window if c["component"] == component]
+        if measured and not any(c["state"] == "gain" for c in measured):
+            hints.append({"component": component, "measured_edits": len(measured),
+                          "edits_that_grew_the_bundle": sum(c["size_change"] > 0 for c in measured),
+                          "suggestion": "最近几轮对该组件的改动都没有测得收益；优先考虑删除或缩短其中已有内容，而不是继续添加。"})
+    return hints
+
+
+def contrast(review, incumbent):
+    """Harness² / ModularRSI: a passing and a failing run of the same case, side by side.
+
+    A check the incumbent fails across many cases points at a general method deficiency; a check
+    one variant passes and the other fails on the same case shows what an edit actually changed.
+    """
+    matrix = review.get("case_matrix") if review else None
+    if not matrix:
+        return None
+    mine = incumbent["sha256"]
+    recurring, pairs = {}, {}
+    for row in matrix:
+        own = row["runs"].get(mine)
+        if own is None:
+            continue
+        for check in own["failed"] if own["status"] == "completed" else ["attempt_" + own["status"]]:
+            recurring.setdefault(check, []).append(row["case"])
+        for other, run in sorted(row["runs"].items()):
+            if other == mine or own["status"] != "completed" or run["status"] != "completed":
+                continue
+            for direction, passing, failing in (("other_passes", run, own), ("incumbent_passes", own, run)):
+                for check in sorted(set(failing["failed"]) & set(passing["passed"])):
+                    pairs.setdefault((check, direction, other), []).append(
+                        {"case": row["case"], "passing": passing["result"], "failing": failing["result"]})
+    return {"incumbent": incumbent, "source_review_cases": len(matrix),
+            "how_to_use": "先打开同一案例上一通过、一失败的两份结果对比差异；优先处理跨案例重复出现的缺陷，不要只凭单个案例改。",
+            "recurring_failures": [{"check": check, "cases": len(cases), "examples": cases[:CONTRAST_EXAMPLES]}
+                                   for check, cases in sorted(recurring.items(), key=lambda kv: (-len(kv[1]), kv[0]))],
+            "pairs": [{"check": check, "direction": direction, "other_bundle": other, "cases": len(items),
+                       "examples": items[:CONTRAST_EXAMPLES]}
+                      for (check, direction, other), items in sorted(pairs.items(), key=lambda kv: (-len(kv[1]), kv[0]))]}
+
+
 LEGACY_RULE = {"rule": "legacy_v1"}
 
 
@@ -109,7 +212,8 @@ def decision_rule(s, spec):
     if supplied is None:
         return dict(LEGACY_RULE)
     rule = {"rule": DECISION_RULE, "min_cases": MIN_CASES[spec["kind"]], "confidence": 0.9,
-            "critical_checks": [], "max_unpaired_share": 0.2, "cost_tolerance": 0.0}
+            "critical_checks": [], "max_unpaired_share": 0.2, "cost_tolerance": 0.0,
+            "max_simplification_loss_share": 0.2}
     if supplied is not None:
         s.require(isinstance(supplied, dict) and set(supplied) <= set(rule) and
                   supplied.get("rule") == DECISION_RULE, "decision_rule must name rule paired_sign_wilson_v1")
@@ -123,6 +227,8 @@ def decision_rule(s, spec):
               "critical checks must be criterion ids")
     s.require(s.number(rule["max_unpaired_share"]) and 0 <= rule["max_unpaired_share"] <= 0.5, "invalid unpaired share")
     s.require(s.number(rule["cost_tolerance"]) and 0 <= rule["cost_tolerance"] <= 0.5, "invalid cost tolerance")
+    s.require(s.number(rule["max_simplification_loss_share"]) and 0 < rule["max_simplification_loss_share"] <= 0.5,
+              "invalid simplification loss share")
     return rule
 
 
@@ -424,13 +530,17 @@ def reflection_payload(s, contract_ref, cfg):
     reader, packet = guidance(s, cfg, "reflection")
     instructions = reflection_instructions(reader, packet, profile)
     s.require(len(instructions) <= cfg["limits"]["context_chars"], "reflection context budget exceeded")
+    rounds = lineage(s, cfg)
     return {"schema": "research_harness_reflection_task.v1", "contract": contract_ref,
             "incumbent": cfg["incumbent"], "evidence": cfg["evidence"], "cases": cfg["cases"],
             "instructions": instructions, "guidance": cfg["guidance"]["reflection"],
             "guidance_inventory": reader.inventory(packet),
             "required_answers": ["diagnosis", "alternative_explanation", "preserve", "expected_effect", "stop_rule"],
             "allowed_components": list(COMPONENTS), "previous_review": cfg.get("previous_review"),
-            "feedback": prior["comparisons"] if prior else None, "execution_feedback": execution}
+            "feedback": prior["comparisons"] if prior else None, "execution_feedback": execution,
+            "contrast": contrast(prior, cfg["incumbent"]), "lineage": rounds, "prune_hints": prune_hints(rounds),
+            "incumbent_size": bundle_size(profile),
+            "allowed_predictions": list(PREDICTIONS if resolved_rule(cfg)["rule"] == "legacy_v1" else PREDICTIONS_V2)}
 
 
 def proposals(s, directory, cfg):
@@ -473,9 +583,9 @@ def proposal_record(s, directory, cfg, proposal_ref, critic_ref):
     s.require(all(ref in allowed for ref in proposal["evidence"]), "proposal uses evidence outside frozen inputs")
     for key in ("diagnosis", "alternative_explanation", "preserve", "stop_rule"):
         nonempty(s, proposal[key], key)
+    legacy = resolved_rule(cfg)["rule"] == "legacy_v1"
     prediction = proposal["expected_effect"]
-    s.require(prediction in ({"metric": "passed_checks", "direction": "increase"},
-                            {"metric": "total_seconds", "direction": "decrease"}), "testable method prediction required")
+    s.require(prediction in (PREDICTIONS if legacy else PREDICTIONS_V2), "testable method prediction required")
     original = bundle(s, cfg["incumbent"], cfg["branch"])
     candidate = bundle(s, proposal["bundle"], cfg["branch"])
     changed = [key for key in COMPONENTS if original[key] != candidate[key]]
@@ -485,13 +595,13 @@ def proposal_record(s, directory, cfg, proposal_ref, critic_ref):
               critic["contract"] == contract_ref and critic["independent"] is True, "critic binding mismatch")
     nonempty(s, critic["verifier"], "critic verifier")
     refs(s, critic["evidence"], "critic evidence")
-    s.require(set(critic["checks"]) == CRITIC_CHECKS and all(type(v) is bool for v in critic["checks"].values()),
-              "invalid critic checks")
+    s.require(set(critic["checks"]) == (CRITIC_CHECKS if legacy else CRITIC_CHECKS_V2) and
+              all(type(v) is bool for v in critic["checks"].values()), "invalid critic checks")
     accepted = all(critic["checks"].values())
     record = {"schema": "research_harness_candidate.v1", "contract": contract_ref, "input": proposal_ref,
               "review": critic_ref, "bundle": proposal["bundle"], "component": changed[0],
               "expected_effect": prediction, "accepted": accepted}
-    if resolved_rule(cfg)["rule"] != "legacy_v1":
+    if not legacy:
         # Opt-in v2: a bundle that writes security codes or dates is rejected before evaluation.
         # Critic model family is recorded so reviewers can see same-model review; it never blocks.
         leakage = bundle_leakage(original, candidate)
@@ -710,13 +820,13 @@ def dominates_v1(a, b):
     return preserves_checks and a["cost"] <= b["cost"] and strict_gain
 
 
-def compare_attempts(s, baseline, candidate, cfg):
+def compare_attempts(s, baseline, candidate, cfg, sizes=None):
     if resolved_rule(cfg)["rule"] == "legacy_v1":
         return compare_attempts_v1(s, baseline, candidate, cfg)
-    return compare_attempts_v2(s, baseline, candidate, cfg)
+    return compare_attempts_v2(s, baseline, candidate, cfg, sizes)
 
 
-def compare_attempts_v2(s, baseline, candidate, cfg):
+def compare_attempts_v2(s, baseline, candidate, cfg, sizes=None):
     """Paired sign test over frozen cases.
 
     v1 rejected a candidate if any single check in any case regressed, and if any cost
@@ -727,6 +837,10 @@ def compare_attempts_v2(s, baseline, candidate, cfg):
     A failed or unknown candidate attempt counts as a loss; a failed baseline attempt
     leaves its case unpaired. Unknown cost is reported, never counted as a saving, and
     does not block a bounded pilot offer.
+
+    ``sizes`` is (incumbent, candidate) bundle_size. Following RRSI's pruner, a strictly
+    smaller bundle need not prove a gain: it passes when the Wilson upper bound of its
+    loss share over paired cases is at most max_simplification_loss_share.
     """
     rule = resolved_rule(cfg)
     if not baseline or not candidate or len(baseline) != len(candidate):
@@ -774,19 +888,29 @@ def compare_attempts_v2(s, baseline, candidate, cfg):
         reasons.append("bounded pilot needs complete measured costs")
     check_gain = decided > 0 and lower > 0.5
     cost_gain = cost_known and losses == 0 and new_cost < old_cost
-    if not (check_gain or cost_gain):
+    paired = wins + losses + ties
+    loss_upper = wilson_upper(losses, paired, CONFIDENCE_Z[rule["confidence"]])
+    simplification = (sizes is not None and sizes[1] < sizes[0] and paired > 0 and
+                      loss_upper <= rule["max_simplification_loss_share"])
+    if not (check_gain or cost_gain or simplification):
         reasons.append("no significant advantage")
+    advantage = None
+    if not reasons:
+        advantage = "checks" if check_gain else "cost" if cost_gain else "simpler_non_inferior"
     return {"accepted": not reasons, "state": "gain" if not reasons else "no_gain", "reasons": reasons,
+            "advantage": advantage,
             "wins": wins, "losses": losses, "ties": ties, "unpaired": unpaired, "cases": cases,
-            "wilson_lower": lower, "confidence": rule["confidence"], "critical_regressions": critical,
+            "wilson_lower": lower, "loss_share_upper": loss_upper,
+            "confidence": rule["confidence"], "critical_regressions": critical,
             "passed_checks": [old_passed, new_passed],
             "total_seconds": [old_cost, new_cost] if cost_known else None,
-            "cost_known": cost_known, "cost": new_cost}
+            "cost_known": cost_known, "cost": new_cost, "bundle_size": list(sizes) if sizes else None}
 
 
 def preference(item):
-    """Order accepted candidates: stronger evidence first, then lower known cost, then content hash."""
-    return (-item["wilson_lower"], item["cost"] if item["cost"] is not None else math.inf, item["bundle"]["sha256"])
+    """Order accepted candidates: stronger evidence, lower known cost, smaller bundle, then content hash."""
+    return (-item["wilson_lower"], item["cost"] if item["cost"] is not None else math.inf,
+            item["bundle_size"][1] if item.get("bundle_size") else math.inf, item["bundle"]["sha256"])
 
 
 def prediction_outcome(prediction, comparison):
@@ -814,10 +938,11 @@ def review_round(s, directory, publish=True, evolution_cost_receipt=None):
     s.require(len(all_variants) > 1 or proposals(s, directory, cfg), "no harness proposals to review")
     measurements, sources = {}, []
     all_events = []
+    idents = [case(s, entry["input"], cfg["branch"])["id"] for entry in cfg["cases"]]
+    case_matrix = [{"case": ident, "runs": {}} for ident in idents]
     for ref, _ in all_variants:
         runs = []
-        for entry in cfg["cases"]:
-            ident = case(s, entry["input"], cfg["branch"])["id"]
+        for entry, ident, row in zip(cfg["cases"], idents, case_matrix):
             path = Path(directory) / "runs" / ref["sha256"] / ident / "RESULT.json"
             s.require(path.exists(), "paired evaluation incomplete; record completed, failed or unknown for every task")
             result_ref = s.reference(path)
@@ -829,14 +954,20 @@ def review_round(s, directory, publish=True, evolution_cost_receipt=None):
             all_events.extend(measured["cost"]["events"])
             sources.append(result_ref)
             runs.append(measured)
+            # Per-case checks feed the next round's contrast; the aggregate alone hides which case moved.
+            row["runs"][ref["sha256"]] = {"status": measured["status"], "result": result_ref,
+                                          "passed": sorted(k for k, v in measured["checks"].items() if v),
+                                          "failed": sorted(k for k, v in measured["checks"].items() if not v)}
         measurements[ref["sha256"]] = runs
     # A timer cannot be shared between arms to make costs look equal or cheap.
     event_sources = [(e["evidence"]["sha256"], e["seconds_path"]) for e in all_events]
     s.require(len(event_sources) == len(set(event_sources)), "cost measurement reused across paired attempts")
     baseline = measurements[cfg["incumbent"]["sha256"]]
+    incumbent_size = bundle_size(bundle(s, cfg["incumbent"], cfg["branch"]))
     comparisons = []
     for ref, proposal_ref in all_variants[1:]:
-        compared = compare_attempts(s, baseline, measurements[ref["sha256"]], cfg)
+        sizes = (incumbent_size, bundle_size(bundle(s, ref, cfg["branch"])))
+        compared = compare_attempts(s, baseline, measurements[ref["sha256"]], cfg, sizes)
         proposal = s.read(s.bound(proposal_ref))
         prediction = proposal["expected_effect"]
         comparisons.append({"bundle": ref, "proposal": proposal_ref, **compared,
@@ -877,6 +1008,7 @@ def review_round(s, directory, publish=True, evolution_cost_receipt=None):
     total_cost = s.summarize_cost(all_events + evolution_events, all_missing)
     obj = {"schema": "research_harness_review.v1", "at": s.now(), "contract": contract_ref,
            "branch": cfg["branch"], "kind": cfg["kind"], "incumbent": cfg["incumbent"], "comparisons": comparisons,
+           "case_matrix": case_matrix,
            "attempts": sources, "complete": complete, "decision": decision, "next_harness": selected,
            "winner_proposal": winner["proposal"] if winner else None, "fixture_winner": winner["bundle"] if winner and cfg["kind"] == "synthetic" else None,
            "efficiency_improvement_claimed": False, "economic_promotion": False,

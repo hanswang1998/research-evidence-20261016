@@ -2,6 +2,8 @@
 
 **2026-10-17 v2 可选规则（计划中写 `decision_rule` 才生效；不写则完全按下文 v1 规则，旧轮次、旧 REVIEW 与旧哈希不变）。** 依据 2026-10-16 证据包：1,277 份方法报告、2,554 个候选、0 次换版；harness 本身尚未有真实轮次。声明 `decision_rule: {rule: paired_sign_wilson_v1}` 后：①配对比较改为按案例计胜负的符号检验，Wilson 下界须大于 1/2，开发轮至少 16 个配对案例（试点 8 个），只对事前声明的关键判据保留一票否决；②每轮候选上限 2→4、案例上限 12→60；③候选版本包新写入证券代码或具体日期即拒绝；④复核者模型家族与生成者是否相同会被记录（`critic_independence`），**不阻止**；⑤成本未知不阻止开发轮获得试点资格，但任何已测得的单次成本超出冻结预算即拒绝，前瞻试点必须成本完整才能判为支持，并用 [计时工具](harness/v2运行说明.md#计时) 实测。理由与证据见 harness-v2/CHANGES.md。
 
+**2026-10-17 吸收的论文做法（理由见 harness-v2/CHANGES.md）。** 不改判定、默认就有的三项：REVIEW 记录每个案例中各版本通过与未通过的判据（`case_matrix`）；下一轮 REFLECTION_TASK 附上历次候选的完整谱系（`lineage`，含提案、版本包、改动组件、测得效果、拒绝原因和体积变化；Meta-Harness 发现摘要会丢掉诊断细节）、同一案例一通过一失败的对照和跨案例反复失败的判据（`contrast`，Harness² 与 ModularRSI 的对比诊断），以及最近三轮改动都没测得收益的组件（`prune_hints`，RRSI 的剪枝；只是提示）。只在 v2 `decision_rule` 下生效的三项：①比父本严格更短的版本包（`bundle_size`：两段提示词、生成问题与单项上下文预算的字符数）不必证明增益，只需逐案例比较的负案例占比 Wilson 上界不超过 `max_simplification_loss_share`（默认 0.2：16 个案例须零负，30 个案例最多 2 负），且无关键判据退化；②多个候选同等时优先更短的版本包；③独立复核多两项判断：`task_agnostic`（不写具体案例、证券、数值或答案）与 `no_inert_addition`（新增文字都会改变行为），并允许预测 `{metric: bundle_size, direction: decrease}`。
+
 2026-10-15，接口 `research_harness.v1`。这是结构／旧 ML 调度的可选维护入口；接入其他线须适配本线消费者，不能仅凭这份文档宣称接通。
 
 当前 Agent 根据证据修改版本包，Python 组装实际任务、校验生成物、比较结果并冻结下一批绑定。原 `next → observe → review-pilot → export` 继续执行。代码不另启模型、不付费调用、不提交实验、不恢复任何研究线，也不改已有冻结 ENGINE、PLAN、SPEC、批次或经济评分器。
@@ -109,7 +111,7 @@ python -X utf8 -B '本轮目录/ENGINE.py' harness --round '本轮目录' --requ
 
 提案 `research_harness_proposal.v1` 绑定 `parent`、`reflection_task`、`evidence`、`bundle`、`component`，并写非空 `diagnosis / alternative_explanation / preserve / stop_rule`。`expected_effect` 当前支持 `{metric: passed_checks, direction: increase}` 或 `{metric: total_seconds, direction: decrease}`，用来核对预测而非自报成功。
 
-独立复核 `research_harness_critic.v1`（或 v2，多一个 `verifier_model` 字段）绑定 `proposal`、本轮 `contract`、非空 `evidence`、`verifier` 和 `independent=true`；`checks` 恰为四个布尔项：`evidence_grounded / bounded_change / preserves_success / testable_prediction`。须实际复核，不用程序自动填四个 true。v2 规则下写了 `verifier_model` 时，程序记录它与 `agent_model` 是否同一模型家族（`critic_independence`），供解读时参考，不阻止提案：2026-10-16 核查的 ML3 12 个审查会话都是生成者同一模型，角色分离不等于独立，是否强制异模型复核另行决定。复核者先独立形成判断，再读提案者理由。
+独立复核 `research_harness_critic.v1`（或 v2，多一个 `verifier_model` 字段）绑定 `proposal`、本轮 `contract`、非空 `evidence`、`verifier` 和 `independent=true`；`checks` 恰为四个布尔项：`evidence_grounded / bounded_change / preserves_success / testable_prediction`；v2 规则下为六项，另加 `task_agnostic / no_inert_addition`。须实际复核，不用程序自动填四个 true。v2 规则下写了 `verifier_model` 时，程序记录它与 `agent_model` 是否同一模型家族（`critic_independence`），供解读时参考，不阻止提案：2026-10-16 核查的 ML3 12 个审查会话都是生成者同一模型，角色分离不等于独立，是否强制异模型复核另行决定。复核者先独立形成判断，再读提案者理由。
 
 Agent 读完 TASK 后使用其反思、生成和上下文要求，输出原 `research_frontier.v1` 与 SPEC。FRONTIER 的 `generation_evidence` 必须含 TASK 引用，仍执行原来源、身份、依赖、短缺说明等校验；新选择器还须满足其原 SPEC 格式。再保存 `research_harness_response.v1`：
 
@@ -134,7 +136,8 @@ Agent 读完 TASK 后使用其反思、生成和上下文要求，输出原 `res
 - 每个案例比较双方通过的冻结判据个数：候选多为胜、少为负、相等为平。候选该案例失败或未知**记负**；父本失败或未知该案例不配对，未配对超过 `max_unpaired_share` 时不能关轮比较。
 - 胜率（胜／(胜+负)）的 Wilson 下界须大于 1/2。按 0.9 置信，16 个决出胜负的案例至少 12 胜；3 胜 0 负也只是勉强过线。`critical_checks` 中任一判据在任一案例从通过变为不通过，直接拒绝。
 - 任何一次已测得的成本超出冻结预算即拒绝，不论其他成本是否已知。双方成本都已测全时，候选总成本不得超过父本 ×(1+`cost_tolerance`)；无负案例且成本严格下降也可算优势。开发轮成本未测全时记 `cost_known=false`，不阻止试点资格，但不能宣称节时；前瞻试点成本未测全则不能判为支持，须用计时工具实测。
-- 多个候选都通过时，按 Wilson 下界高者、已知成本低者、内容哈希依次选取，不依赖注册／完成顺序。失败、未知、被拒绝版本和预测命中／落空均保留。
+- 比父本严格更短的候选可按非劣通过：负案例占比的 Wilson 上界不超过 `max_simplification_loss_share`，且无关键判据退化；这让删减与增加同等竞争，不必证明增益。
+- 多个候选都通过时，按 Wilson 下界高者、已知成本低者、版本包更短者、内容哈希依次选取，不依赖注册／完成顺序。失败、未知、被拒绝版本和预测命中／落空均保留。
 
 v1 的“每个案例中的每项判据不得退化”在每案例只生成一次的情况下会因为随机波动拒掉真实改进，同时又分不清运气和改进；v1 还要求成本完整，而当时 1,277 份方法报告全部有成本字段为空。
 

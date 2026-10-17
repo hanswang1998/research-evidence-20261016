@@ -1,6 +1,44 @@
-# Harness v2 修改说明（2026-10-16，2026-10-17 两轮复核后修订）
+# Harness v2 修改说明（2026-10-16，2026-10-17 三轮修订）
 
-## 2026-10-17 第二轮：1.2.0 审查的两处校验漏洞（先读这一节）
+## 2026-10-17 第三轮：按 RSI 论文的精华修改（先读这一节）
+
+只借了适合这个场景的部分。这里评估一次要几小时到几天，结果噪声大、还会过拟合，所以借的方向是：
+- 让反思看到更多真实对照；
+- 让删减和增加同等竞争；
+- 复核多查两项；
+- 交替对照加一组预算对齐的对照。
+
+调度层和种群搜索没有动。
+
+| 论文 | 借的做法 | 改了什么 | 何时生效 |
+|---|---|---|---|
+| Meta-Harness（2603.28052） | 提案者要看到历次候选的原件和执行记录；只看摘要会丢掉诊断细节 | REFLECTION_TASK 加 `lineage`：最近 8 轮每个候选的提案、版本包、改动组件、测得效果、拒绝原因和体积变化，全部是原件引用 | 默认；只加信息 |
+| Harness²（2610.14224）、ModularRSI（2609.14857） | 对比同一任务上成功和失败的尝试，再跨任务汇总共同缺陷；不需要标准答案 | REVIEW 加 `case_matrix`（每个案例中各版本通过与未通过的判据）；REFLECTION_TASK 加 `contrast`（反复失败的判据，以及一通过一失败的结果对） | 默认；只加信息 |
+| RRSI 剪枝（2609.24972） | 改动从未带来收益的组件应该删减。不加约束时版本只会越加越多：每次 token 从 1.56M 涨到 3.80M，分布外没有增益 | `prune_hints` 列出最近三轮改动都没测得收益的组件，只是提示。v2 规则下，比父本严格更短的版本包按非劣通过：负案例占比的 Wilson 上界不超过 `max_simplification_loss_share`（默认 0.2），且无关键判据退化。16 个案例须零负，30 个案例最多 2 负。多个候选同等时优先更短的 | 提示默认生效；判定只在 v2 |
+| RRSI 复核 | 评分前就拒绝写入任务名、实体、具体数值、答案或无效机制的改动；消融实验中去掉接受侧约束，分布外分数掉 2.6 | v2 复核多两项判断：`task_agnostic`、`no_inert_addition`；允许预测 `bundle_size` 下降 | 只在 v2 |
+| Rethinking Harness Evolution（2607.12227） | 预算对齐后，自动进化常常胜不过简单重试 | 交替对照加 `--control`（旧版加同等额外预算）和 `--candidate-overhead`（产生新版的成本），报告每次成功花的资源秒数 | 工具；只报告，不阻止结论 |
+
+`bundle_size` 是两段提示词、生成问题和单项上下文预算的字符数之和，是 Agent 每次要读的量的近似值。
+
+**没有采纳的，以及原因：**
+- **RRSI 的逐轮收紧改动预算。** 你们已经规定每个候选只改一个组件，已经是最小值。
+- **种群或档案式搜索（DGM、HGM、GEA）。** 一次评估要几小时到几天，跑不起；RHI 的作者也认为种群搜索对这类任务太贵。`lineage` 至少让提案者能参考被拒的版本。
+- **调度层再加约束。** 重判 2,330 个候选，有优势的 206 个全是少几次请求，这一层杠杆小，不再投入。
+- **用模型审 diff 代替规则匹配。** 保留规则匹配，再加上复核者的两项判断；复核者用的是哪个模型仍然只记录。
+- **Harness² 的任务级递归（Propose-Probe-Compose）。** 研究层已有兄弟分支（v2）；“Compose”这一步要等有真实批次数据再设计。
+
+**默认行为。** v1 的判定不变，REVIEW 和 REFLECTION_TASK 只多了几个信息字段。
+
+**测试。**
+- 新增 `tests/test_harness_paper_essence.py`，共 16 个测试。其中 3 个端到端测试复用原有 harness 测试的夹具，需要项目里的 `tests/test_research_frontier.py`，缺少时自动跳过。
+- 这一轮我第一次在这边跑通了原有的 32 个 harness 测试：用一个最小替身代替证据包里缺的 `test_research_frontier.py`。10-16 原版、上一轮分支、本轮分支都全部通过。替身不提交，因为你们本地有真文件，所以这一结果要以你们本地复跑为准。
+- 现在本分支共 69 个新测试：工具 12、语义 29、校验 12、本轮 16，全部通过。
+
+**合并。** `patches/04_paper_essence.diff` 基于 01+02+03。改动集中在 `research_harness.py`、`research_online_ab.py` 和四份文档。
+
+---
+
+## 2026-10-17 第二轮：1.2.0 审查的两处校验漏洞
 
 1.2.0 审查复现的两个 P1 漏洞，在 10-16 原版和本分支上都能复现：`batch()` 与 1.2.0 的位置相同（1434 行），`ledger()` 只差十几行。
 
@@ -26,7 +64,7 @@
 
 **本分支相关改动。** 冻结滚动验证合同时，边界还须用 `walkforward_runtime: {path, sha256}` 绑定打分器文件，以前可以省略。这样重算出的 `BATCH.json` 指向同一份字节；改动批次内的 `WALKFORWARD.py` 也会被发现。
 
-**补丁改为三份，按顺序打，每一步测试都通过。** 打完与本分支一致；在 10-16 原版上已验证：
+**补丁改为三份（第三轮又加了 `04_paper_essence.diff`），按顺序打，每一步测试都通过。** 打完与本分支一致；在 10-16 原版上已验证：
 - `01_tools.diff`：只新增文件，不变。
 - `02_integrity.diff`：本节的修复，按**原版代码结构**写，不依赖 01 和 03，可以单独先打到 1.2.0 上。逻辑改动只有约 50 行，其余是把两段函数体提出来造成的缩进变化，合并时可以对照 `git diff -w` 看。
 - `03_opt_in_semantics.diff`：原来的 `02_opt_in_semantics.diff`，改为基于 01+02。
@@ -83,7 +121,7 @@ v1 的自我改进循环在结构上不可能放行任何改动：1,277 次方�
 | `engine/research_line_digest.py` | 新增 |
 | `engine/research_online_ab.py` | 新增 |
 | `config/line_digest/ml3.json` | 新增（示例配置） |
-| `tests/test_harness_v2_tools.py`、`tests/test_harness_v2_semantics.py`、`tests/test_scheduler_integrity.py` | 新增（12 + 29 + 12 个测试） |
+| `tests/test_harness_v2_tools.py`、`tests/test_harness_v2_semantics.py`、`tests/test_scheduler_integrity.py`、`tests/test_harness_paper_essence.py` | 新增（12 + 29 + 12 + 16 个测试） |
 | `docs/Harness反思与改进.md`、`docs/研究调度提示词.md`、`docs/研究调度运行手册.md`、`docs/当前研究目标.md`、`docs/研究验收标准.md`、`docs/harness/目标与评价.md` | 修改 |
 | `docs/harness/v2运行说明.md` | 新增 |
 | 其余 `docs/`、`engine/research_guidance.py`、`tests/test_research_harness.py` | 未改，仅作对照 |
